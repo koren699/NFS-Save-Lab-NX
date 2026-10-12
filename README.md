@@ -1,8 +1,11 @@
 # NFS Save Lab NX
 
-**v0.2 — Custom racing-inspired graphical UI for Nintendo Switch.**
+**v0.3 — Editable Cash, Bounty, Heat Level and manual Backup / Restore.**
 
 This experimental homebrew scans local save files for community ports of **Need for Speed: Most Wanted (2005)**, **Underground 2** and **Carbon**.
+
+### New in v0.3
+After choosing a save, select **Cash**, **Bounty**, or **Heat Level** (1–5). Use the D-pad to enter your own old and new amounts; nothing is forced to the maximum. Choose **Create Backup** to copy the original, or **Restore Backup** to select a saved .nfslab.bakN snapshot and restore it after creating another safety copy.
 
 ### What is new in v0.2
 - 1280×720 native libnx framebuffer rendering, no heavy GUI dependencies.
