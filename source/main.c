@@ -7,181 +7,323 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include "engine.h"
+#include "font8x8_basic.h"
 
+#define SW 1280
+#define SH 720
 #define MAX_FILES 180
 #define PATH_CAP 768
-#define VISIBLE 13
+#define MAX_LABEL 112
+#define MAX_ROWS 7
+#define COLOR(r,g,b) RGBA8_MAXALPHA(r,g,b)
+#define BG COLOR(9,13,18)
+#define PANEL COLOR(18,25,32)
+#define PANEL2 COLOR(24,32,40)
+#define WHITE COLOR(238,244,247)
+#define MUTED COLOR(139,155,165)
+#define GREEN COLOR(181,248,54)
+#define RED COLOR(255,102,93)
 
-static const char *games[]={"Most Wanted '05 (Xbox 360)","Underground 2 (Xbox)","Carbon (Xbox)"};
-static const char *roots[][5]={
- {"sdmc:/switch/nfsmw-nx/nfsmw", "sdmc:/switch/nfsmw/nfsmw", "sdmc:/switch/nfsmw-nx/saves", "sdmc:/switch/nfsmw/saves", NULL},
+typedef struct {char path[PATH_CAP];char name[MAX_LABEL];uint32_t size;int backup;} SaveFile;
+static const char *game_names[]={"MOST WANTED", "UNDERGROUND 2", "CARBON"};
+static const char *game_descriptions[]={"ROCKPORT  //  XBOX 360", "BAYVIEW  //  ORIGINAL XBOX", "PALMONT CITY  //  ORIGINAL XBOX"};
+static const char *game_root[][6]={
+ {"sdmc:/switch/nfsmw-nx/nfsmw","sdmc:/switch/nfsmw/nfsmw",
+  "sdmc:/switch/nfsmw-nx/saves","sdmc:/switch/nfsmw/saves",NULL},
  {"sdmc:/switch/nfsu2x/game/UDATA","sdmc:/switch/nfsu2x/game/Save",NULL},
  {"sdmc:/switch/nfscx/game/UDATA","sdmc:/switch/nfscx/game/Save",NULL}
 };
-typedef struct{char path[PATH_CAP];char relative[160];uint32_t bytes;int copy_only;} SaveFile;
-static SaveFile files[MAX_FILES];static int nfiles=0,game=0,selected=0;
-static LabMatches matches;static int matchidx=0;static uint32_t old_val=0,new_val=9999999;
-static int scanerr=0,patcherr=0;static int screen=0;static int digit=4;
-static char notice[240]="Choose game / A: search files";
-static char backuppath[1024]="";
+static SaveFile files[MAX_FILES];
+static int nfiles=0,selected=0,game=0,screen=0,match_idx=0,digit=4;
+static uint32_t old_val=0,new_val=9999999;
+static LabMatches matches;
+static int scan_err=0,patch_err=0;
+static char backup_path[1024]={0};
+static char status_line[190]="READY TO SCAN LOCAL SAVES";
+static Framebuffer fb;
+static uint32_t *pixels;
+static int pitch;
+static uint32_t accent=GREEN;
 
-static int is_dir(const char *path){struct stat st;return stat(path,&st)==0 && S_ISDIR(st.st_mode);}
-static int included_file(const char *name){
-    if(name[0]=='.')return 0;
-    const char *suffixes[]={".nro",".nsp",".xex",".xbe",".iso",".png",".jpg",".jpeg",".dds",".log",".toml",".nfsp",".bak",".tmp",".xml",".txt",".tga",".zip",".7z",NULL};
-    for(int k=0;suffixes[k];k++){
-        size_t n=strlen(name),l=strlen(suffixes[k]);
-        if(n>=l && strcasecmp(name+n-l,suffixes[k])==0)return 0;
-    }
-    if(strstr(name,".nfslab."))return 0;
-    return 1;
+static void rect(int x,int y,int w,int h,uint32_t c){
+ if(x<0){w+=x;x=0;} if(y<0){h+=y;y=0;}
+ if(x+w>SW)w=SW-x;if(y+h>SH)h=SH-y;if(w<=0||h<=0)return;
+ for(int yy=y;yy<y+h;yy++){uint32_t *p=pixels+yy*pitch+x;for(int xx=0;xx<w;xx++)p[xx]=c;}
 }
-static void crawl(const char *path,const char *label,int depth,int copy_only){
-    if(depth>7 || nfiles>=MAX_FILES)return;
-    DIR *dir=opendir(path);if(!dir)return;
-    struct dirent *ent;
-    while((ent=readdir(dir)) && nfiles<MAX_FILES){
-        if(!strcmp(ent->d_name,".")||!strcmp(ent->d_name,".."))continue;
-        char full[PATH_CAP];int k=snprintf(full,sizeof(full),"%s/%s",path,ent->d_name);
-        if(k<0||(size_t)k>=sizeof(full))continue;
-        struct stat st;if(stat(full,&st)!=0)continue;
-        if(S_ISDIR(st.st_mode)){crawl(full,label,depth+1,copy_only);continue;}
-        if(!S_ISREG(st.st_mode)||st.st_size<32||st.st_size>(off_t)LAB_MAX_FILE||!included_file(ent->d_name))continue;
-        SaveFile *f=&files[nfiles++];snprintf(f->path,sizeof(f->path),"%s",full);
-        snprintf(f->relative,sizeof(f->relative),"%s / %.100s",label,ent->d_name);
-        f->bytes=(uint32_t)st.st_size;f->copy_only=copy_only;
-    }
-    closedir(dir);
+static void stroke(int x,int y,int w,int h,uint32_t c,int t){
+ rect(x,y,w,t,c);rect(x,y+h-t,w,t,c);rect(x,y,t,h,c);rect(x+w-t,y,t,h,c);
 }
-static void discover(void){
-    nfiles=selected=0;
-    for(int r=0;roots[game][r];r++){
-        const char *root=roots[game][r];
-        if(is_dir(root)){
-            const char *leaf=strrchr(root,'/');
-            crawl(root,leaf?leaf+1:root,0,game==0 && r>=2);
-        }
-    }
-    snprintf(notice,sizeof(notice),"Found %d candidate files. Choose a save.",nfiles);
+static void txt(int x,int y,int scale,const char *s,uint32_t c){
+ if(!s)return;
+ int start=x;
+ for(const unsigned char *p=(const unsigned char*)s;*p;p++){
+  if(*p=='\n'){x=start;y+=scale*11;continue;}
+  if(x+scale*8>SW)break;
+  unsigned ch=*p<128?*p:'?';
+  for(int cy=0;cy<8;cy++){unsigned char bits=(unsigned char)font8x8_basic[ch][cy];
+   for(int cx=0;cx<8;cx++)if(bits&(1u<<cx))rect(x+cx*scale,y+cy*scale,scale,scale,c);
+  }
+  x+=scale*8;
+ }
 }
-static uint32_t inc_amount(uint32_t v,int sign,int place){
-    static const uint32_t steps[]={1,10,100,1000,10000,100000,1000000,10000000,100000000};
-    uint32_t d=steps[place];if(sign>0)return v>999999999u-d?999999999u:v+d;
-    return v<d?0:v-d;
+static void cliptext(int x,int y,int scale,const char *s,uint32_t c,int chars){
+ char b[190];snprintf(b,sizeof(b),"%.*s",chars,s?s:"");txt(x,y,scale,b,c);
 }
-static int value_input(PadState *pad,uint32_t *v,u64 keys){
-    if(keys&HidNpadButton_Left){if(digit<8)digit++;return 0;}
-    if(keys&HidNpadButton_Right){if(digit>0)digit--;return 0;}
-    if(keys&HidNpadButton_Up){*v=inc_amount(*v,1,digit);return 1;}
-    if(keys&HidNpadButton_Down){*v=inc_amount(*v,-1,digit);return 1;}
-    (void)pad;return 0;
+static void line(int x0,int y0,int x1,int y1,uint32_t c,int thickness){
+ int dx=abs(x1-x0),sx=x0<x1?1:-1,dy=-abs(y1-y0),sy=y0<y1?1:-1,err=dx+dy;
+ for(;;){rect(x0,y0,thickness,thickness,c);if(x0==x1&&y0==y1)break;int e2=2*err;if(e2>=dy){err+=dy;x0+=sx;}if(e2<=dx){err+=dx;y0+=sy;}}
+}
+static void label(int x,int y,const char *s){txt(x,y,2,s,MUTED);}
+static void button_hint(int x,int y,const char *key,const char *caption){
+ int ww=(int)strlen(key)*16+22;rect(x,y-6,ww,31,PANEL2);stroke(x,y-6,ww,31,COLOR(70,83,91),1);
+ txt(x+11,y,2,key,WHITE);txt(x+ww+11,y,2,caption,MUTED);
+}
+static void empty(void){
+ for(int y=0;y<SH;y++){
+  int shift=(y*9)/720;
+  uint32_t color=COLOR(8+shift,12+shift,18+shift);
+  uint32_t *p=pixels+y*pitch;
+  for(int x=0;x<SW;x++)p[x]=color;
+ }
+ for(int i=0;i<19;i++){
+  int x=780+i*35;
+  line(x,-12,x-400,720,COLOR(21,30,37),1);
+ }
+ rect(0,0,SW,6,accent);
+ rect(0,630,SW,90,COLOR(13,19,24));
+ rect(0,629,SW,1,COLOR(41,54,58));
+}
+static void header(const char *sub){
+ rect(65,30,52,52,accent);
+ txt(74,46,3,"N",BG);
+ txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
+ txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
+ txt(980,42,2,"BUILD 0.2.0",WHITE);
+ rect(65,111,1150,2,COLOR(46,61,67));
+ txt(66,136,2,sub,MUTED);
+}
+static void pill(int x,int y,const char *s,uint32_t color){
+ int w=(int)strlen(s)*16+24;rect(x,y,w,29,color);txt(x+12,y+6,2,s,BG);
+}
+static void frame(int x,int y,int w,int h,int sel){
+ rect(x,y,w,h,sel?COLOR(34,47,53):PANEL);
+ rect(x,y,sel?6:2,h,sel?accent:COLOR(64,75,79));
+ rect(x,y+h-2,w,2,sel?accent:COLOR(39,53,59));
+ if(sel){rect(x+7,y,w-14,2,COLOR(65,86,70));}
+}
+static void big_number(int x,int y,const char *s){
+ txt(x+3,y+4,5,s,COLOR(46,76,42));
+ txt(x,y,5,s,WHITE);
+}
+static void footer(const char *shortline){
+ label(67,648,shortline);
+ label(67,685,"CLOSE THE GAME BEFORE EDITING  /  SAVE CHECKSUMS NOT VERIFIED");
+}
+static void game_card(int idx,int x,int y){
+ int active=game==idx,w=360,h=355;
+ frame(x,y,w,h,active);
+ uint32_t c=idx==0?GREEN:idx==1?COLOR(69,209,241):COLOR(247,164,67);
+ rect(x+15,y+15,w-30,118,COLOR(12,19,25));
+ for(int z=0;z<13;z++){
+  int ax=x+132+z*24;
+  line(ax,y+15,ax-85,y+132,COLOR(38,52,55),1);
+ }
+ rect(x+18,y+15,9,118,c);
+ txt(x+40,y+37,5,idx==0?"MW":idx==1?"U2":"CX",WHITE);
+ txt(x+44,y+102,2,idx==0?"2005":idx==1?"2004":"2006",c);
+ txt(x+22,y+164,3,game_names[idx],active?WHITE:COLOR(201,213,218));
+ txt(x+22,y+220,2,game_descriptions[idx],MUTED);
+ rect(x+22,y+266,316,1,COLOR(60,73,79));
+ txt(x+22,y+290,2,idx==0?"PORT / RECOMP X360":"PORT / RECOMP XBOX",active?c:MUTED);
+ if(active){pill(x+210,y+20,"SELECTED",c);}
+}
+static void dashboard(void){
+ header("SELECT A PORT");
+ txt(65,185,4,"YOUR GARAGE.",WHITE);
+ txt(65,231,2,"CHOOSE THE GAME TO ANALYZE LOCAL SAVE DATA",MUTED);
+ for(int i=0;i<3;i++)game_card(i,65+i*392,274);
+ footer("L / R  CHANGE GAME       A  OPEN SAVE BROWSER       +  EXIT");
+}
+static void info_panel(const char *heading,const char *subtitle){
+ frame(64,182,752,420,0);
+ txt(84,204,3,heading,WHITE);
+ label(85,250,subtitle);
+ rect(835,182,380,420,COLOR(22,31,37));
+ rect(835,182,6,420,accent);
+ txt(862,204,3,"SAVE STATUS",WHITE);
+ label(862,252,"TARGET GAME");
+ txt(862,284,2,game_names[game],accent);
+ label(862,331,"CURRENT VALUE");
+ char b[50];snprintf(b,sizeof(b),"%09u",old_val);txt(862,362,3,b,WHITE);
+ label(862,416,"PATCH MODE");
+ pill(862,451,"EXPERIMENTAL",COLOR(245,178,72));
+ label(862,520,"BACKUP: AUTO ON WRITE");
+}
+static void files_page(void){
+ header("01 / LOCAL SAVE FILES");
+ info_panel("SELECT A SAVE","UP / DOWN TO PICK A FILE.  A TO CONTINUE.");
+ int start=selected-3;if(start<0)start=0;if(start>nfiles-MAX_ROWS)start=nfiles-MAX_ROWS;if(start<0)start=0;
+ for(int z=0;z<MAX_ROWS;z++){
+  int i=start+z;if(i>=nfiles)break;
+  int y=277+z*44,active=i==selected;
+  if(active){rect(78,y-5,723,41,COLOR(48,67,69));rect(78,y-5,5,41,accent);}
+  char b[80];snprintf(b,sizeof(b),"%02d  %.31s",i+1,files[i].name);
+  txt(91,y+4,2,b,active?WHITE:MUTED);
+  if(files[i].backup)txt(680,y+4,2,"[COPY]",COLOR(248,180,69));
+ }
+ if(!nfiles){txt(88,335,2,"NO SAVE FILES FOUND IN KNOWN PORT FOLDERS",RED);label(88,373,"CREATE A GAME SAVE AND TRY AGAIN.");}
+ footer("UP / DOWN  SELECT       A  CONTINUE       B  BACK");
+}
+static void value_page(int next){
+ header(next?"04 / NEW VALUE":"02 / CURRENT GAME VALUE");
+ info_panel(next?"SET NEW AMOUNT":"FIND CURRENT AMOUNT",next?"VALUE TO WRITE INTO A CANDIDATE OFFSET":"ENTER THE NUMBER CURRENTLY SHOWN IN GAME");
+ uint32_t v=next?new_val:old_val;
+ char b[32];snprintf(b,sizeof(b),"%09u",v);
+ big_number(91,310,b);
+ int cursorx=91+(8-digit)*40;
+ rect(cursorx,367,37,5,accent);
+ label(89,413,"UP / DOWN  ADJUST DIGIT");
+ label(89,446,"LEFT / RIGHT  MOVE BETWEEN DIGITS");
+ label(89,509,next?"A  REVIEW PATCH":"A  SCAN FILE FOR THIS NUMBER");
+ footer(next?"A  REVIEW       B  BACK":"A  SCAN       B  BACK");
+}
+static void matches_page(void){
+ header("03 / MATCHES");
+ info_panel("POSSIBLE VALUES","BYTE MATCHES  /  NOT VERIFIED MONEY LOCATIONS");
+ char s[125];snprintf(s,sizeof(s),"%d MATCHES FOUND %s",matches.count,matches.overflow?"(LIMIT HIT)":"");
+ txt(87,281,2,s,accent);
+ if(scan_err){txt(87,321,2,lab_error(scan_err),RED);}
+ if(!scan_err && matches.count==0)label(87,330,"NO PLAIN 32-BIT VALUE FOUND IN FILE.");
+ for(int z=0;z<6;z++){
+  int start=match_idx>2?match_idx-2:0;
+  int i=start+z;if(i>=matches.count)break;
+  int y=322+z*43;
+  if(i==match_idx){rect(79,y-7,726,38,COLOR(46,66,64));rect(80,y-7,5,38,accent);}
+  char b[85];snprintf(b,sizeof(b),"%02d / 0x%08X  / %s",i+1,matches.items[i].offset,matches.items[i].be?"BIG ENDIAN":"LITTLE ENDIAN");
+  txt(93,y,2,b,i==match_idx?WHITE:MUTED);
+ }
+ footer(matches.overflow?"TOO MANY MATCHES  /  WRITING DISABLED":"UP / DOWN  OFFSET       A  EDIT       B  BACK");
+}
+static void review_page(void){
+ header("05 / SAFETY CHECK");
+ info_panel("CONFIRM CHANGE","VERIFY THE FILE AND AMOUNTS BEFORE WRITING");
+ char b[140];
+ snprintf(b,sizeof(b),"CURRENT   %09u",old_val);txt(95,303,3,b,MUTED);
+ snprintf(b,sizeof(b),"NEW       %09u",new_val);txt(95,370,3,b,accent);
+ snprintf(b,sizeof(b),"OFFSET 0x%08X / %s",matches.items[match_idx].offset,matches.items[match_idx].be?"BE":"LE");
+ txt(95,429,2,b,WHITE);
+ txt(95,485,2,"GAME SAVE MAY FAIL CHECKSUM VALIDATION",RED);
+ txt(95,523,2,"HOLD ZL + ZR, THEN PRESS A TO WRITE",WHITE);
+ footer("ZL + ZR + A  WRITE AND BACKUP ORIGINAL       B  CANCEL");
+}
+static void result_page(void){
+ header("06 / WRITE RESULT");
+ info_panel("OPERATION COMPLETE","RETURN TO BROWSER FOR ANOTHER SAVE");
+ txt(91,321,3,patch_err?"WRITE FAILED":"BYTE PATCH WRITTEN",patch_err?RED:accent);
+ if(patch_err){txt(91,373,2,lab_error(patch_err),RED);}
+ else {label(91,385,"ORIGINAL COPIED TO .NFSLAB.BAKN");label(91,431,"NOT YET VERIFIED TO LOAD IN GAME");}
+ footer("B  RETURN TO FILES");
 }
 static void draw(void){
-    consoleClear();
-    printf("NFS SAVE LAB NX  v0.1  |  OFFLINE\n");
-    printf("----------------------------------------------------------\n");
-    printf("Game: %s\n",games[game]);
-    printf("Warning: experimental. CHECKSUMS ARE NOT REPAIRED.\n");
-    printf("Exit games before editing. Keep a separate backup.\n\n");
-    if(screen==0){
-        printf("Select game: L / R\n\n");
-        for(int i=0;i<3;i++)printf(" %c %s\n",game==i?'>':' ',games[i]);
-        printf("\nA: find local save files    +: exit\n");
-    }else if(screen==1){
-        printf("File list (%d). Up/Down: choose. A: select. B: back\n",nfiles);
-        int start=selected-(VISIBLE/2);if(start<0)start=0;if(start>nfiles-VISIBLE)start=nfiles-VISIBLE;if(start<0)start=0;
-        for(int i=start;i<nfiles && i<start+VISIBLE;i++){
-            printf("%c%c %.38s  (%u KB)\n",i==selected?'>':' ',files[i].copy_only?'!':' ',files[i].relative,files[i].bytes/1024);
-        }
-        if(nfiles==0)printf("No files. Make a game save first.\n");
-        printf("\n! = port backup copy (view ONLY)\n");
-    }else if(screen==2){
-        printf("Selected: %.58s\n",files[selected].relative);
-        printf("Size: %u bytes   %s\n\n",files[selected].bytes,files[selected].copy_only?"BACKUP COPY":"LIVE CANDIDATE");
-        printf("1) Enter CURRENT in-game cash/bounty value:\n");
-        printf("    %09u\n",old_val);
-        printf("    %*s^ digit\n\n",13-digit,"");
-        printf("Up/Down: change highlighted digit (10^%d)\n",digit);
-        printf("Left/Right: choose digit\n");
-        printf("A: scan file   B: back\n");
-    }else if(screen==3){
-        printf("Scan result: %d hit(s)%s\n",matches.count,matches.overflow?" (TRUNCATED)":"");
-        if(scanerr)printf("Error: %s\n",lab_error(scanerr));
-        if(matches.count==0)printf("No plain 32-bit value found. Could be encoded/hashed.\n");
-        for(int i=0;i<matches.count && i<8;i++){
-            printf(" %c Offset 0x%08X  %s\n",i==matchidx?'>':' ',matches.items[i].offset,matches.items[i].be?"BIG endian":"LITTLE endian");
-        }
-        if(matches.count>8)printf("... total %d; use Up/Down to select\n",matches.count);
-        printf("\nONLY exact current value matches are shown.\n");
-        printf("A: change target amount  B: back\n");
-    }else if(screen==4){
-        printf("New amount (experimental patch):\n\n");
-        printf("    %09u\n",new_val);
-        printf("    %*s^ digit\n\n",13-digit,"");
-        printf("Up/Down: change highlighted digit; Left/Right: digit\n");
-        printf("A: review write   B: back\n");
-    }else if(screen==5){
-        printf("DANGER: Changing raw data may INVALIDATE GAME SAVE!\n\n");
-        printf("OLD %u -> NEW %u\n",old_val,new_val);
-        printf("Offset 0x%08X, %s\n",matches.items[matchidx].offset,matches.items[matchidx].be?"BE":"LE");
-        printf("%s\n\n",files[selected].path);
-        printf("Will preserve original as .nfslab.bakN.\n");
-        printf("Will NOT repair game checksums/hashes.\n");
-        printf("Hold ZL + ZR and press A to write.\n");
-        printf("B: cancel\n");
-    }else if(screen==6){
-        printf("Result: %s\n",patcherr?lab_error(patcherr):"Wrote candidate bytes");
-        if(!patcherr)printf("Backup: %s\n",backuppath);
-        printf("\nTHIS DOES NOT GUARANTEE THE GAME WILL LOAD SAVE.\n");
-        printf("B: go to file list\n");
-    }
-    printf("\n----------------------------------------------------------\n");
-    printf("%s\n",notice);
-    consoleUpdate(NULL);
+ uint32_t stride;
+ pixels=(uint32_t*)framebufferBegin(&fb,&stride);
+ if(!pixels)return;
+ pitch=(int)(stride/4);
+ accent=game==0?GREEN:game==1?COLOR(69,209,241):COLOR(247,164,67);
+ empty();
+ switch(screen){case 0:dashboard();break;case 1:files_page();break;
+ case 2:value_page(0);break;case 3:matches_page();break;
+ case 4:value_page(1);break;case 5:review_page();break;case 6:result_page();break;}
+ if(status_line[0]){
+  rect(64,605,1150,23,COLOR(36,45,50));
+  cliptext(73,609,2,status_line,WHITE,68);
+ }
+ framebufferEnd(&fb);
+}
+static int is_dir(const char *p){struct stat st;return stat(p,&st)==0&&S_ISDIR(st.st_mode);}
+static int suitable(const char *name){
+ if(name[0]=='.'||strstr(name,".nfslab."))return 0;
+ const char *bad[]={".nro",".nsp",".xex",".xbe",".iso",".png",".jpg",".dds",".log",".toml",".nfsp",".bak",".tmp",".xml",".txt",".zip",".7z",NULL};
+ for(int i=0;bad[i];i++){size_t n=strlen(name),s=strlen(bad[i]);if(n>=s&&!strcasecmp(name+n-s,bad[i]))return 0;}
+ return 1;
+}
+static void crawl(const char *root,int depth,int backup){
+ if(depth>7||nfiles>=MAX_FILES)return;
+ DIR *d=opendir(root);if(!d)return;
+ struct dirent *ent;
+ while((ent=readdir(d))&&nfiles<MAX_FILES){
+  if(!strcmp(ent->d_name,".")||!strcmp(ent->d_name,".."))continue;
+  char p[PATH_CAP];int len=snprintf(p,sizeof(p),"%s/%s",root,ent->d_name);
+  if(len<0||(size_t)len>=sizeof(p))continue;
+  struct stat st;if(stat(p,&st))continue;
+  if(S_ISDIR(st.st_mode)){crawl(p,depth+1,backup);continue;}
+  if(!S_ISREG(st.st_mode)||st.st_size<32||st.st_size>(off_t)LAB_MAX_FILE||!suitable(ent->d_name))continue;
+  SaveFile *f=&files[nfiles++];
+  snprintf(f->path,sizeof(f->path),"%s",p);snprintf(f->name,sizeof(f->name),"%s",ent->d_name);
+  f->size=(uint32_t)st.st_size;f->backup=backup;
+ }
+ closedir(d);
+}
+static void discover(void){
+ nfiles=0;selected=0;
+ for(int r=0;game_root[game][r];r++)if(is_dir(game_root[game][r]))crawl(game_root[game][r],0,game==0&&r>=2);
+ snprintf(status_line,sizeof(status_line),"%d FILES FOUND / CHOOSE A CANDIDATE SAVE",nfiles);
+}
+static uint32_t change(uint32_t v,int sign,int digit_place){
+ uint32_t step=1;for(int i=0;i<digit_place;i++)step*=10;
+ if(sign>0)return v>999999999-step?999999999:v+step;
+ return v<step?0:v-step;
+}
+static void handle(u64 key,u64 held){
+ if(screen==0){
+  if(key&HidNpadButton_L)game=(game+2)%3;
+  if(key&HidNpadButton_R)game=(game+1)%3;
+  if(key&HidNpadButton_A){discover();screen=1;}
+ } else if(screen==1){
+  if(key&HidNpadButton_B)screen=0;
+  else if(key&HidNpadButton_Up&&selected>0)selected--;
+  else if(key&HidNpadButton_Down&&selected<nfiles-1)selected++;
+  else if(key&HidNpadButton_A&&nfiles){old_val=0;digit=4;screen=2;snprintf(status_line,sizeof(status_line),"FILE: %.150s",files[selected].name);}
+ } else if(screen==2||screen==4){
+  uint32_t *v=screen==2?&old_val:&new_val;
+  if(key&HidNpadButton_B)screen=screen==2?1:3;
+  else if(key&HidNpadButton_A){
+   if(screen==2){scan_err=lab_scan(files[selected].path,old_val,&matches);match_idx=0;screen=3;snprintf(status_line,sizeof(status_line),"%d CANDIDATE BYTE MATCHES",matches.count);}
+   else screen=5;
+  } else if(key&HidNpadButton_Left&&digit<8)digit++;
+  else if(key&HidNpadButton_Right&&digit>0)digit--;
+  else if(key&HidNpadButton_Up)*v=change(*v,1,digit);
+  else if(key&HidNpadButton_Down)*v=change(*v,-1,digit);
+ } else if(screen==3){
+  if(key&HidNpadButton_B)screen=2;
+  else if(key&HidNpadButton_Up&&match_idx>0)match_idx--;
+  else if(key&HidNpadButton_Down&&match_idx<matches.count-1)match_idx++;
+  else if(key&HidNpadButton_A&&!scan_err&&matches.count>0&&!matches.overflow&&!files[selected].backup){digit=4;screen=4;}
+  else if(key&HidNpadButton_A&&files[selected].backup)snprintf(status_line,sizeof(status_line),"BACKUP COPY: CANNOT PATCH THIS FILE");
+ } else if(screen==5){
+  if(key&HidNpadButton_B)screen=4;
+  else if(key&HidNpadButton_A){
+   if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
+    patch_err=lab_patch(files[selected].path,old_val,new_val,matches.items[match_idx],backup_path,sizeof(backup_path));screen=6;
+    snprintf(status_line,sizeof(status_line),patch_err?"WRITE FAILED / ORIGINAL SHOULD BE INTACT":"RAW BYTES PATCHED / SAVE INTEGRITY NOT VERIFIED");
+   }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR WHILE PRESSING A TO CONFIRM");
+  }
+ }else if(screen==6&&key&HidNpadButton_B){discover();screen=1;}
 }
 int main(int argc,char **argv){
-    (void)argc;(void)argv;
-    consoleInit(NULL);padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
-    draw();
-    while(appletMainLoop()){
-        padUpdate(&pad);u64 k=padGetButtonsDown(&pad);
-        if(!k){svcSleepThread(12000000L);continue;}
-        if(screen==0){
-            if(k&HidNpadButton_Plus)break;
-            if(k&HidNpadButton_L)game=(game+2)%3;
-            if(k&HidNpadButton_R)game=(game+1)%3;
-            if(k&HidNpadButton_A){discover();screen=1;}
-        }else if(screen==1){
-            if(k&HidNpadButton_B)screen=0;
-            if(k&HidNpadButton_Up && selected>0)selected--;
-            if(k&HidNpadButton_Down && selected<nfiles-1)selected++;
-            if(k&HidNpadButton_A && nfiles>0){old_val=0;digit=4;screen=2;}
-        }else if(screen==2){
-            if(k&HidNpadButton_B)screen=1;
-            else if(k&HidNpadButton_A){scanerr=lab_scan(files[selected].path,old_val,&matches);matchidx=0;screen=3;}
-            else value_input(&pad,&old_val,k);
-        }else if(screen==3){
-            if(k&HidNpadButton_B)screen=2;
-            if(k&HidNpadButton_Up && matchidx>0)matchidx--;
-            if(k&HidNpadButton_Down && matchidx<matches.count-1)matchidx++;
-            if(k&HidNpadButton_A && !scanerr && matches.count>0 && !matches.overflow && !files[selected].copy_only){
-                digit=4;screen=4;
-            }
-        }else if(screen==4){
-            if(k&HidNpadButton_B)screen=3;
-            else if(k&HidNpadButton_A)screen=5;
-            else value_input(&pad,&new_val,k);
-        }else if(screen==5){
-            if(k&HidNpadButton_B)screen=4;
-            else if(k&HidNpadButton_A){
-                u64 held=padGetButtons(&pad);
-                if((held&HidNpadButton_ZL) && (held&HidNpadButton_ZR)){
-                    patcherr=lab_patch(files[selected].path,old_val,new_val,matches.items[matchidx],backuppath,sizeof(backuppath));
-                    screen=6;
-                }else snprintf(notice,sizeof(notice),"Hold BOTH triggers (ZL + ZR) while pressing A.");
-            }
-        }else if(screen==6){if(k&HidNpadButton_B){discover();screen=1;}}
-        draw();
-    }
-    consoleExit(NULL);return 0;
+ (void)argc;(void)argv;
+ NWindow *win=nwindowGetDefault();
+ if(R_FAILED(framebufferCreate(&fb,win,SW,SH,PIXEL_FORMAT_RGBA_8888,2)))return 1;
+ if(R_FAILED(framebufferMakeLinear(&fb))){framebufferClose(&fb);return 1;}
+ padConfigureInput(1,HidNpadStyleSet_NpadStandard);
+ PadState pad;padInitializeDefault(&pad);
+ draw();
+ while(appletMainLoop()){
+  padUpdate(&pad);
+  u64 key=padGetButtonsDown(&pad);
+  if(screen==0&&(key&HidNpadButton_Plus))break;
+  if(key){handle(key,padGetButtons(&pad));draw();}
+  svcSleepThread(16000000L);
+ }
+ framebufferClose(&fb);return 0;
 }
