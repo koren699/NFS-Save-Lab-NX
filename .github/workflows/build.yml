@@ -1,0 +1,39 @@
+name: Build Nintendo Switch NRO
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    env:
+      DEVKITPRO: /opt/devkitpro
+      DEVKITA64: /opt/devkitpro/devkitA64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Test file-edit engine on host
+        run: bash tests/run.sh
+
+      - name: Compile Switch homebrew
+        run: make -j2
+
+      - name: Confirm NRO output
+        run: test -s nfs_save_lab_nx.nro
+
+      - name: Upload compiled NRO
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFS-Save-Lab-NX
+          path: nfs_save_lab_nx.nro
+          if-no-files-found: error
+          retention-days: 30
