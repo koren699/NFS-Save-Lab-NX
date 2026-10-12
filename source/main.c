@@ -189,7 +189,7 @@ static void action_page(void){
   if(sel){rect(78,y-10,725,52,COLOR(43,64,63));rect(78,y-10,5,52,accent);}
   char s[75];snprintf(s,sizeof(s),"0%d   %s",i+1,entries[i]);
   txt(96,y,2,s,sel?WHITE:MUTED);
-  txt(395,y,2,notes[i],sel?accent:MUTED);
+  cliptext(435,y,2,notes[i],sel?accent:MUTED,22);
  }
  footer("UP / DOWN  SELECT       A  OPEN       B  FILES");
 }
