@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include "engine.h"
+#include "backup.h"
 #include "font8x8_basic.h"
 
 #define SW 1280
@@ -35,10 +36,14 @@ static const char *game_root[][6]={
 };
 static SaveFile files[MAX_FILES];
 static int nfiles=0,selected=0,game=0,screen=0,match_idx=0,digit=4;
+static int metric=0, action=0, restore_index=0, restore_count=0, backup_result=0;
+static const char *metric_names[]={"CASH","BOUNTY","HEAT LEVEL"};
+static char restore_paths[64][1024];
 static uint32_t old_val=0,new_val=9999999;
 static LabMatches matches;
 static int scan_err=0,patch_err=0;
 static char backup_path[1024]={0};
+static int backup_error=0;
 static char status_line[190]="READY TO SCAN LOCAL SAVES";
 static Framebuffer fb;
 static uint32_t *pixels;
@@ -98,7 +103,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.2.0",WHITE);
+ txt(980,42,2,"BUILD 0.3.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -174,22 +179,95 @@ static void files_page(void){
  if(!nfiles){txt(88,335,2,"NO SAVE FILES FOUND IN KNOWN PORT FOLDERS",RED);label(88,373,"CREATE A GAME SAVE AND TRY AGAIN.");}
  footer("UP / DOWN  SELECT       A  CONTINUE       B  BACK");
 }
+static void action_page(void){
+ header("02 / MODIFY OR PROTECT SAVE");
+ info_panel("CHOOSE AN ACTION","SELECT A METRIC OR BACKUP OPERATION");
+ const char *entries[]={"CASH","BOUNTY","HEAT LEVEL","CREATE BACKUP","RESTORE BACKUP"};
+ const char *notes[]={"IN-GAME MONEY","CHASE REWARD POINTS","CHASE POLICE HEAT (1 - 5)","KEEP ORIGINAL SNAPSHOT","RESTORE A PREVIOUS SNAPSHOT"};
+ for(int i=0;i<5;i++){
+  int y=284+i*58,sel=i==action;
+  if(sel){rect(78,y-10,725,52,COLOR(43,64,63));rect(78,y-10,5,52,accent);}
+  char s[75];snprintf(s,sizeof(s),"0%d   %s",i+1,entries[i]);
+  txt(96,y,2,s,sel?WHITE:MUTED);
+  txt(395,y,2,notes[i],sel?accent:MUTED);
+ }
+ footer("UP / DOWN  SELECT       A  OPEN       B  FILES");
+}
+static void load_backups(void) {
+ restore_count=0;restore_index=0;
+ if(!nfiles || selected<0 || selected>=nfiles)return;
+ for(int n=1;n<=999 && restore_count<64;n++){
+  char b[1024];
+  int len=snprintf(b,sizeof(b),"%s.nfslab.bak%d",files[selected].path,n);
+  if(len<0||(size_t)len>=sizeof(b))break;
+  struct stat st;
+  if(!stat(b,&st)&&S_ISREG(st.st_mode)&&st.st_size>0 && st.st_size<=(off_t)LAB_MAX_FILE){
+   snprintf(restore_paths[restore_count++],sizeof(restore_paths[0]),"%s",b);
+  }
+ }
+}
+static void backups_page(void){
+ header("03 / RESTORE SNAPSHOT");
+ info_panel("SELECT A BACKUP","ONLY SNAPSHOTS CREATED BY SAVE LAB ARE SHOWN");
+ if(!restore_count)txt(89,319,2,"NO BACKUPS AVAILABLE FOR THIS SAVE",RED);
+ int start=restore_index-3;if(start<0)start=0;
+ if(start>restore_count-6)start=restore_count-6;if(start<0)start=0;
+ for(int i=start;i<restore_count && i<start+6;i++){
+  int y=291+(i-start)*48,active=i==restore_index;
+  if(active){rect(79,y-9,725,39,COLOR(45,65,62));rect(79,y-9,5,39,accent);}
+  const char *suffix=strstr(restore_paths[i],".nfslab.bak");
+  char b[90];snprintf(b,sizeof(b),"SNAPSHOT %02d    %s",i+1,suffix?suffix:"BACKUP");
+  txt(95,y,2,b,active?WHITE:MUTED);
+ }
+ footer("UP / DOWN  SELECT       A  REVIEW RESTORE       B  BACK");
+}
+static void restore_confirm_page(void){
+ header("04 / RESTORE CONFIRMATION");
+ info_panel("RESTORE THIS BACKUP?","CURRENT SAVE WILL BE COPIED BEFORE REPLACING");
+ txt(91,295,2,"SELECTED BACKUP:",MUTED);
+ char b[60];snprintf(b,sizeof(b),"%d OF %d",restore_index+1,restore_count);
+ txt(91,342,3,b,WHITE);
+ txt(91,410,2,"EXISTING GAME SAVE WILL BE OVERWRITTEN",RED);
+ txt(91,454,2,"A NEW SAFETY SNAPSHOT IS CREATED FIRST",accent);
+ txt(91,523,2,"HOLD ZL + ZR, THEN PRESS A TO RESTORE",WHITE);
+ footer("ZL + ZR + A  RESTORE       B  CANCEL");
+}
+static void backup_result_page(void){
+ header("05 / BACKUP OPERATION");
+ info_panel("BACKUP / RESTORE","VERIFIED FILE COPY  /  ORIGINAL RETAINED");
+ txt(91,320,3,backup_error?"OPERATION FAILED":(backup_result?"RESTORE COMPLETE":"BACKUP CREATED"),
+     backup_error?RED:accent);
+ if(backup_error)txt(91,390,2,lab_backup_error(backup_error),RED);
+ else {
+  label(91,397,backup_result?"CURRENT FILE REPLACED / OLD SAVE BACKED UP":"SOURCE FILE UNCHANGED");
+  label(91,445,"SNAPSHOT STORED NEXT TO GAME SAVE");
+ }
+ footer("B  RETURN TO OPTIONS");
+}
 static void value_page(int next){
  header(next?"04 / NEW VALUE":"02 / CURRENT GAME VALUE");
- info_panel(next?"SET NEW AMOUNT":"FIND CURRENT AMOUNT",next?"VALUE TO WRITE INTO A CANDIDATE OFFSET":"ENTER THE NUMBER CURRENTLY SHOWN IN GAME");
+ info_panel(next?"SET DESIRED VALUE":"FIND CURRENT VALUE",next?"CHOOSE YOUR OWN TARGET AMOUNT":"ENTER THE EXACT CURRENT IN-GAME VALUE");
+ txt(91,270,2,metric_names[metric],accent);
  uint32_t v=next?new_val:old_val;
- char b[32];snprintf(b,sizeof(b),"%09u",v);
- big_number(91,310,b);
- int cursorx=91+(8-digit)*40;
- rect(cursorx,367,37,5,accent);
- label(89,413,"UP / DOWN  ADJUST DIGIT");
- label(89,446,"LEFT / RIGHT  MOVE BETWEEN DIGITS");
- label(89,509,next?"A  REVIEW PATCH":"A  SCAN FILE FOR THIS NUMBER");
+ char b[32];
+ if(metric==2)snprintf(b,sizeof(b),"%u / 5",v);
+ else snprintf(b,sizeof(b),"%09u",v);
+ big_number(91,326,b);
+ if(metric!=2){
+  int cursorx=91+(8-digit)*40;
+  rect(cursorx,380,37,5,accent);
+  label(89,422,"UP / DOWN  ADJUST SELECTED DIGIT");
+  label(89,456,"LEFT / RIGHT  CHANGE DIGIT");
+ }else{
+  label(89,422,"UP / DOWN  SELECT LEVEL 1 - 5");
+  label(89,456,"ONLY 1 MATCH MAY BE EDITED IN HEAT MODE");
+ }
+ label(89,509,next?"A  REVIEW CHANGE":"A  SCAN FOR CURRENT VALUE");
  footer(next?"A  REVIEW       B  BACK":"A  SCAN       B  BACK");
 }
 static void matches_page(void){
  header("03 / MATCHES");
- info_panel("POSSIBLE VALUES","BYTE MATCHES  /  NOT VERIFIED MONEY LOCATIONS");
+ info_panel("POSSIBLE VALUES","RAW 32-BIT MATCHES, NOT VERIFIED GAME FIELDS");
  char s[125];snprintf(s,sizeof(s),"%d MATCHES FOUND %s",matches.count,matches.overflow?"(LIMIT HIT)":"");
  txt(87,281,2,s,accent);
  if(scan_err){txt(87,321,2,lab_error(scan_err),RED);}
@@ -202,16 +280,19 @@ static void matches_page(void){
   char b[85];snprintf(b,sizeof(b),"%02d / 0x%08X  / %s",i+1,matches.items[i].offset,matches.items[i].be?"BIG ENDIAN":"LITTLE ENDIAN");
   txt(93,y,2,b,i==match_idx?WHITE:MUTED);
  }
- footer(matches.overflow?"TOO MANY MATCHES  /  WRITING DISABLED":"UP / DOWN  OFFSET       A  EDIT       B  BACK");
+ footer(matches.overflow?"TOO MANY MATCHES  /  WRITING DISABLED":
+       metric==2&&matches.count!=1?"HEAT NEEDS EXACTLY ONE MATCH  /  WRITE BLOCKED":
+       "UP / DOWN  OFFSET       A  EDIT       B  BACK");
 }
 static void review_page(void){
  header("05 / SAFETY CHECK");
  info_panel("CONFIRM CHANGE","VERIFY THE FILE AND AMOUNTS BEFORE WRITING");
  char b[140];
- snprintf(b,sizeof(b),"CURRENT   %09u",old_val);txt(95,303,3,b,MUTED);
- snprintf(b,sizeof(b),"NEW       %09u",new_val);txt(95,370,3,b,accent);
+ snprintf(b,sizeof(b),"%s",metric_names[metric]);txt(95,279,2,b,WHITE);
+ snprintf(b,sizeof(b),"CURRENT   %09u",old_val);txt(95,324,3,b,MUTED);
+ snprintf(b,sizeof(b),"NEW       %09u",new_val);txt(95,381,3,b,accent);
  snprintf(b,sizeof(b),"OFFSET 0x%08X / %s",matches.items[match_idx].offset,matches.items[match_idx].be?"BE":"LE");
- txt(95,429,2,b,WHITE);
+ txt(95,437,2,b,WHITE);
  txt(95,485,2,"GAME SAVE MAY FAIL CHECKSUM VALIDATION",RED);
  txt(95,523,2,"HOLD ZL + ZR, THEN PRESS A TO WRITE",WHITE);
  footer("ZL + ZR + A  WRITE AND BACKUP ORIGINAL       B  CANCEL");
@@ -233,7 +314,9 @@ static void draw(void){
  empty();
  switch(screen){case 0:dashboard();break;case 1:files_page();break;
  case 2:value_page(0);break;case 3:matches_page();break;
- case 4:value_page(1);break;case 5:review_page();break;case 6:result_page();break;}
+ case 4:value_page(1);break;case 5:review_page();break;case 6:result_page();break;
+ case 7:action_page();break;case 8:backups_page();break;
+ case 9:restore_confirm_page();break;case 10:backup_result_page();break;}
  if(status_line[0]){
   rect(64,605,1150,23,COLOR(36,45,50));
   cliptext(73,609,2,status_line,WHITE,68);
@@ -283,13 +366,36 @@ static void handle(u64 key,u64 held){
   if(key&HidNpadButton_B)screen=0;
   else if(key&HidNpadButton_Up&&selected>0)selected--;
   else if(key&HidNpadButton_Down&&selected<nfiles-1)selected++;
-  else if(key&HidNpadButton_A&&nfiles){old_val=0;digit=4;screen=2;snprintf(status_line,sizeof(status_line),"FILE: %.150s",files[selected].name);}
+  else if(key&HidNpadButton_A&&nfiles){old_val=0;digit=4;action=0;screen=7;snprintf(status_line,sizeof(status_line),"SELECTED FILE: %.130s",files[selected].name);}
+ } else if(screen==7){
+  if(key&HidNpadButton_B)screen=1;
+  else if(key&HidNpadButton_Up&&action>0)action--;
+  else if(key&HidNpadButton_Down&&action<4)action++;
+  else if(key&HidNpadButton_A){
+   if(action<3){
+    if(files[selected].backup){
+     snprintf(status_line,sizeof(status_line),"READ-ONLY PORT COPY / CHOOSE A LIVE FILE");return;
+    }
+    metric=action;old_val=metric==2?1:0;new_val=metric==2?2:50000;digit=4;screen=2;
+   } else if(action==3) {
+    if(files[selected].backup){snprintf(status_line,sizeof(status_line),"CANNOT BACK UP A PORT MIRROR AS LIVE SAVE");return;}
+    backup_result=0;
+    backup_error=lab_make_backup(files[selected].path,backup_path,sizeof(backup_path));
+    screen=10;
+   } else {
+    if(files[selected].backup){snprintf(status_line,sizeof(status_line),"CHOOSE A LIVE SAVE TO RESTORE");return;}
+    load_backups();screen=8;
+   }
+  }
  } else if(screen==2||screen==4){
   uint32_t *v=screen==2?&old_val:&new_val;
-  if(key&HidNpadButton_B)screen=screen==2?1:3;
+  if(key&HidNpadButton_B)screen=screen==2?7:3;
   else if(key&HidNpadButton_A){
    if(screen==2){scan_err=lab_scan(files[selected].path,old_val,&matches);match_idx=0;screen=3;snprintf(status_line,sizeof(status_line),"%d CANDIDATE BYTE MATCHES",matches.count);}
    else screen=5;
+  } else if(metric==2) {
+   if(key&HidNpadButton_Up&&*v<5)(*v)++;
+   else if(key&HidNpadButton_Down&&*v>1)(*v)--;
   } else if(key&HidNpadButton_Left&&digit<8)digit++;
   else if(key&HidNpadButton_Right&&digit>0)digit--;
   else if(key&HidNpadButton_Up)*v=change(*v,1,digit);
@@ -298,7 +404,8 @@ static void handle(u64 key,u64 held){
   if(key&HidNpadButton_B)screen=2;
   else if(key&HidNpadButton_Up&&match_idx>0)match_idx--;
   else if(key&HidNpadButton_Down&&match_idx<matches.count-1)match_idx++;
-  else if(key&HidNpadButton_A&&!scan_err&&matches.count>0&&!matches.overflow&&!files[selected].backup){digit=4;screen=4;}
+  else if(key&HidNpadButton_A&&!scan_err&&matches.count>0&&!matches.overflow&&!files[selected].backup&&
+          (metric!=2||matches.count==1)){digit=4;screen=4;}
   else if(key&HidNpadButton_A&&files[selected].backup)snprintf(status_line,sizeof(status_line),"BACKUP COPY: CANNOT PATCH THIS FILE");
  } else if(screen==5){
   if(key&HidNpadButton_B)screen=4;
@@ -308,7 +415,23 @@ static void handle(u64 key,u64 held){
     snprintf(status_line,sizeof(status_line),patch_err?"WRITE FAILED / ORIGINAL SHOULD BE INTACT":"RAW BYTES PATCHED / SAVE INTEGRITY NOT VERIFIED");
    }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR WHILE PRESSING A TO CONFIRM");
   }
- }else if(screen==6&&key&HidNpadButton_B){discover();screen=1;}
+ }else if(screen==6&&key&HidNpadButton_B){screen=7;}
+ else if(screen==8){
+  if(key&HidNpadButton_B)screen=7;
+  else if(key&HidNpadButton_Up&&restore_index>0)restore_index--;
+  else if(key&HidNpadButton_Down&&restore_index<restore_count-1)restore_index++;
+  else if(key&HidNpadButton_A&&restore_count>0)screen=9;
+ }else if(screen==9){
+  if(key&HidNpadButton_B)screen=8;
+  else if(key&HidNpadButton_A){
+   if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
+    backup_result=1;backup_error=lab_restore_backup(files[selected].path,
+      restore_paths[restore_index],backup_path,sizeof(backup_path));
+    screen=10;snprintf(status_line,sizeof(status_line),"RESTORE %s",
+      backup_error?"FAILED":"COMPLETE / CURRENT SAVE SAFETY COPY SAVED");
+   }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR WHILE PRESSING A");
+  }
+ }else if(screen==10&&key&HidNpadButton_B)screen=7;
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
