@@ -1,16 +1,22 @@
 # NFS Save Lab NX
 
-Experimental save-file tool for the Nintendo Switch homebrew ports of **Need for Speed: Most Wanted (2005)**, **Underground 2** and **Carbon**.
+**v0.2 — Custom racing-inspired graphical UI for Nintendo Switch.**
 
-**Build status:** [GitHub Actions](https://github.com/koren699/NFS-Save-Lab-NX/actions/workflows/build.yml) — automated compilation with `devkitpro/devkita64`.
+This experimental homebrew scans local save files for community ports of **Need for Speed: Most Wanted (2005)**, **Underground 2** and **Carbon**.
 
-### Download the NRO
+### What is new in v0.2
+- 1280×720 native libnx framebuffer rendering, no heavy GUI dependencies.
+- Dark graphite interface with racing lines, neon green/cyan/orange themed game cards.
+- Save browser, number entry, byte-match viewer, patch confirmation and result screens.
+- Joy-Con/controller navigation: `L/R` game selection; `A` continue; `B` back; D-pad navigate and change digits; `+` exit from home.
+- Original save automatically moved to `.nfslab.bakN` before writing raw bytes.
 
-1. Open **[Actions → Build Nintendo Switch NRO](https://github.com/koren699/NFS-Save-Lab-NX/actions/workflows/build.yml)**.
-2. Open the latest successful (green) run.
-3. Under **Artifacts**, select `NFS-Save-Lab-NX`.
-4. Unzip and copy `nfs_save_lab_nx.nro` to `sdmc:/switch/NFS_Save_Lab_NX/`.
+### Download
 
-For detailed instructions, see [README_UA.md](README_UA.md).
+1. Open [GitHub Actions](https://github.com/koren699/NFS-Save-Lab-NX/actions/workflows/build.yml).
+2. Open a successful run and download its **NFS-Save-Lab-NX** artifact (ZIP).
+3. Copy `nfs_save_lab_nx.nro` to `sdmc:/switch/` and start it from HBMenu.
 
-**Important:** The initial release is an experimental scanner/patcher, **not a verified cash cheat**. It cannot regenerate the game's proprietary save integrity data. Always back up saves and test on a spare profile; a modified file may fail to load.
+**Safety warning:** This is **not** a verified money cheat. Scanning for a 32-bit number does not establish that it is the actual cash field. The application does **not** recalculate game-specific save integrity checksums. Modified saves may not load. Always use a spare save and independent backups. Touch controls are not implemented yet.
+
+[Українська інструкція](README_UA.md)
