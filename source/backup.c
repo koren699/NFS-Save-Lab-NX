@@ -104,10 +104,23 @@ int lab_restore_backup(const char *save,const char *snapshot,
     int k=snprintf(temp,sizeof(temp),"%s.nfslab.restore.part",save);
     if(k<0 || (size_t)k>=sizeof(temp)||!available(temp))return -4;
     rc=copy_verify(snapshot,temp);if(rc)return rc;
-    /* Before replacing current file, retain its intact contents. */
+    /* Keep old contents in a verified snapshot, then move the live path away.
+       FAT/newlib may refuse rename(temp, save) while save still exists. */
     rc=lab_make_backup(save,safety_backup,cap);
     if(rc){remove(temp);return rc;}
-    if(rename(temp,save)!=0){remove(temp);return -5;}
+    char oldpart[1024];
+    k=snprintf(oldpart,sizeof(oldpart),"%s.nfslab.oldpart",save);
+    if(k<0 || (size_t)k>=sizeof(oldpart) || !available(oldpart)){remove(temp);return -4;}
+    if(rename(save,oldpart)!=0){remove(temp);return -5;}
+    if(rename(temp,save)!=0){
+        if(rename(oldpart,save)!=0){ /* Original is still at oldpart on SD. */
+            remove(temp);return -8;
+        }
+        remove(temp);return -5;
+    }
+    /* The new save is present and the previous bytes are in safety_backup.
+       If removing oldpart fails it remains as an extra recoverable copy. */
+    remove(oldpart);
     return 0;
 }
 const char *lab_backup_error(int code) {
@@ -120,6 +133,7 @@ const char *lab_backup_error(int code) {
        case -5:return "FILE I/O ERROR";
        case -6:return "COPY VERIFICATION FAILED";
        case -7:return "INVALID RESTORE SOURCE";
+       case -8:return "ORIGINAL RETAINED AS .oldpart";
        default:return "UNKNOWN ERROR";
     }
 }
