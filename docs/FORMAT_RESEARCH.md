@@ -43,6 +43,19 @@ CRC3 @ 0x18 = EA_CRC32(data[0:0x18])           # includes new CRC2
 
 **2026-10-13: game-side success confirmed.** A separately produced MC02 copy with Cash **400000** and all 4 recomputed checksums was loaded successfully by the user in the Switch Xbox 360-port, and the game displayed **400000**. This validates a real edited save, not merely the hashes. In-app native Cash editing was then added in v0.5 with a strict file-length, signature, 4-hash and expected-cash gate. It uses the same algorithm, passes byte-identical synthetic cross-checks against the Python reference and preserves a verified .nfslab.bakN. **The first native v0.5 in-app edit itself still needs hardware testing.**
 
+## Verified Bounty record relocation (third private user save, 2026-10-13)
+
+The user supplied an updated MC02 career with visible **Bounty 45150** (previous reference **31550**). Both original files are 62688-byte valid MC02 profiles, matching all four original integrity checks. Money in the new save is also different (multiple gameplay changes), so this is *not* a single-variable mutation.
+
+- Old `31550.0` occurs as float32 BE `46 F6 7C 00` at `0x010E`.
+- New `45150.0` occurs as float32 BE `47 30 5E 00` at `0x015A`.
+- Both values are preceded by the **same unique 12-byte marker** `47 1C B2 90 8B E4 E2 55 47 33 00 31`.
+- The record appears to relocate or reorder; avoid hard-coded Bounty offsets.
+- v0.7 uses this exact marker to *read* Bounty. It does not modify the value.
+- **The Bounty editing path remains unvalidated**: only a copied, separately patched file tested in-game could establish that modifying this float and the integrity values is accepted by the port.
+
+The individual private source saves are not stored in this public repo.
+
 ## Not established
 - Actual Xbox 360 file internals (record IDs, compression/encryption, money/bounty/heat mapping).
 - In-app native v0.5 implementation successfully editing and loading its own Cash modifications (manual Python-equivalent test already succeeded in-game).
