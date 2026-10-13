@@ -1,3 +1,15 @@
+# NFS Save Lab NX v0.10 — Carbon save discovery
+
+v0.10 corrects the native **Need for Speed Carbon (Original Xbox)** save-directory discovery for `antoxa2584x/nfsc-sw`: `sdmc:/switch/nfscx/save/`, including the Xbox `UserData` and `TitleData` mappings. The read-only Carbon browser shows candidate file name, size and first eight bytes (hex); excludes virtual disk `*.img` files. It retains old `game/UDATA` as a fallback, but that is **not** the canonical live save location.
+
+**Carbon editing remains disabled** pending format, integrity and Cash-location validation on actual user files. Most Wanted MC02 Cash+Bounty features remain unchanged.
+
+The conversation-distributed HD package embeds the three 336×360 RGB565 posters into the same NRO. The GitHub Actions default artifact retains fallback poster art without post-build packaging.
+
+See [Carbon format research](docs/CARBON_RESEARCH.md). Keep independent backups of live saves.
+
+---
+
 # NFS Save Lab NX v0.9
 
 Nintendo Switch homebrew utility for fan ports of Need for Speed Most Wanted (2005), Underground 2 and Carbon.
