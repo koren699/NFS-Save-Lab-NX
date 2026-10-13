@@ -59,6 +59,9 @@ static unsigned bounty_selected=0;
 static int bounty_write_error=0;
 static int carbon_cash_error=0;
 static uint32_t carbon_cash_value=0;
+static uint32_t carbon_test_amount=0;
+static int carbon_test_error=0;
+static char carbon_test_path[1024]={0};
 static char status_line[190]="READY TO SCAN LOCAL SAVES";
 static Framebuffer fb;
 static uint32_t *pixels;
@@ -197,7 +200,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.12.0",WHITE);
+ txt(980,42,2,"BUILD 0.13.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -216,7 +219,7 @@ static void big_number(int x,int y,const char *s){
 }
 static void footer(const char *shortline){
  label(67,648,shortline);
- label(67,685,game==2?"CARBON: CASH INFO ONLY / EDITOR LOCKED":
+ label(67,685,game==2?"CARBON: EXPERIMENTAL CASH TEST COPY / LIVE SAVE SAFE":
       "MOST WANTED: CASH + BOUNTY MC02    /    HEAT: READ ONLY");
 }
 static void game_card(int idx,int x,int y){
@@ -594,10 +597,51 @@ static void carbon_cash_info_page(void){
  if(nfiles && selected>=0 && selected<nfiles)
   cliptext(836,280,2,files[selected].name,WHITE,20);
  txt(836,358,2,"EDITOR STATUS",MUTED);
- pill(836,396,"READ ONLY",accent);
- label(836,474,"SAVE IS NOT MODIFIED");
- footer(nfiles==1?"B  BACK TO GAMES       CARBON: CASH INFO":
-       "B  BACK TO CAREERS       CARBON: CASH INFO");
+ pill(836,396,"TEST COPY",accent);
+ label(836,474,"ORIGINAL STAYS UNCHANGED");
+ footer(carbon_cash_error?"B  BACK":"A  TEST CASH CHANGE       B  BACK");
+}
+static void carbon_cash_edit_page(void){
+ header("CARBON / EXPERIMENTAL CASH");
+ info_panel("SET TEST CASH","CREATES A SEPARATE SAVE FILE - NO OVERWRITE");
+ char b[80];snprintf(b,sizeof(b),"CURRENT: $%u",carbon_cash_value);
+ txt(91,286,2,b,WHITE);
+ txt(91,338,2,"TEST AMOUNT:",accent);
+ snprintf(b,sizeof(b),"%09u",carbon_test_amount);
+ big_number(91,376,b);
+ rect(91+(8-digit)*40,432,37,5,accent);
+ label(91,476,"UP / DOWN  CHANGE AMOUNT");
+ label(91,512,"LEFT / RIGHT  SELECT DIGIT");
+ footer("A  REVIEW EXPERIMENT       B  BACK");
+}
+static void carbon_cash_test_confirm_page(void){
+ header("CARBON / TEST SAVE CONFIRM");
+ info_panel("EXPERIMENTAL SAVE ONLY","XBOX WRAPPER AUTHENTICATION IS NOT YET VERIFIED");
+ char b[100];snprintf(b,sizeof(b),"CASH: $%u -> $%u",
+                             carbon_cash_value,carbon_test_amount);
+ txt(91,283,2,b,WHITE);
+ txt(91,338,2,"ORIGINAL CAREER WILL NOT BE MODIFIED",accent);
+ txt(91,380,2,"OUTPUT: ALIAS_*.nfslab.carbon.test",WHITE);
+ label(91,433,"THE GAME MAY REJECT THIS TEST FILE");
+ label(91,473,"MANUAL DBI REPLACEMENT NEEDED FOR GAME TEST");
+ label(91,525,"HOLD ZL + ZR AND PRESS A TO CREATE");
+ footer("ZL + ZR + A  CREATE TEST       B  CANCEL");
+}
+static void carbon_cash_test_result_page(void){
+ header("CARBON / TEST FILE RESULT");
+ info_panel(carbon_test_error?"NO TEST FILE CREATED":"TEST SAVE CREATED",
+            "THE LIVE CARBON CAREER WAS NEVER REPLACED");
+ if(carbon_test_error){
+  txt(91,320,2,carbon_error(carbon_test_error),RED);
+  label(91,393,"KEEP USING THE ORIGINAL SAVE");
+ }else{
+  char b[64];snprintf(b,sizeof(b),"TEST CASH: $%u",carbon_test_amount);
+  txt(91,317,3,b,accent);
+  txt(91,401,2,"FILE: ALIAS_*.nfslab.carbon.test",WHITE);
+  label(91,456,"USE DBI TO COPY AND RENAME TEST FOR A GAME LOAD");
+  label(91,506,"MAKE A SEPARATE BACKUP OF ORIGINAL FIRST");
+ }
+ footer("B  BACK TO CARBON CAREER");
 }
 static void draw(void){
  uint32_t stride;
@@ -619,7 +663,10 @@ static void draw(void){
  case 19:bounty_edit_page();break;
  case 20:bounty_confirm_page();break;
  case 21:bounty_result_page();break;
- case 22:carbon_cash_info_page();break;}
+ case 22:carbon_cash_info_page();break;
+ case 23:carbon_cash_edit_page();break;
+ case 24:carbon_cash_test_confirm_page();break;
+ case 25:carbon_cash_test_result_page();break;}
  if(status_line[0]){
   rect(64,605,1150,23,COLOR(36,45,50));
   cliptext(73,609,2,status_line,WHITE,68);
@@ -868,7 +915,33 @@ static void handle(u64 key,u64 held){
    }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR THEN PRESS A");
   }
  }else if(screen==21&&key&HidNpadButton_B)screen=7;
- else if(screen==22&&key&HidNpadButton_B){screen=nfiles==1?0:1;status_line[0]=0;}
+ else if(screen==22){
+  if(key&HidNpadButton_B){screen=nfiles==1?0:1;status_line[0]=0;}
+  else if((key&HidNpadButton_A)&&!carbon_cash_error){
+   carbon_test_amount=carbon_cash_value;
+   digit=4;screen=23;status_line[0]=0;
+  }
+ }else if(screen==23){
+  if(key&HidNpadButton_B)screen=22;
+  else if(key&HidNpadButton_A){
+   if(carbon_test_amount==carbon_cash_value)
+    snprintf(status_line,sizeof(status_line),"TEST AMOUNT MUST DIFFER FROM CURRENT CASH");
+   else{screen=24;status_line[0]=0;}
+  }else{
+   int previous=metric;metric=0;
+   change_number(key,&carbon_test_amount);metric=previous;
+  }
+ }else if(screen==24){
+  if(key&HidNpadButton_B)screen=23;
+  else if(key&HidNpadButton_A){
+   if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
+    carbon_test_error=carbon_create_cash_test(files[selected].path,
+      carbon_cash_value,carbon_test_amount,
+      carbon_test_path,sizeof(carbon_test_path));
+    screen=25;status_line[0]=0;
+   }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR AND PRESS A");
+  }
+ }else if(screen==25&&key&HidNpadButton_B){screen=22;status_line[0]=0;}
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
