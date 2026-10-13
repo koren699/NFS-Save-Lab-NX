@@ -119,38 +119,98 @@ int mc02_read_cash(const char *path,uint32_t *cash){
  * to 0x015A, so we never use a hardcoded Bounty offset.
  * This reader deliberately has NO write path.
  */
+/* MC02 Xbox 360: live pursuit records at 0xE2F5 (25 * 0x38),
+ * bounty at +0x10; sold history at 0xE86D. Slot 0xFF is retired,
+ * even if its stale payload still contains nonzero bounty. */
+int mc02_bounty_inspect(const unsigned char *input,size_t len,Mc02BountyInfo *info){
+ if(!info)return -3;
+ memset(info,0,sizeof(*info));
+ int r=mc02_verify(input,len,NULL);
+ if(r)return r;
+ info->sold_history=be32(input+0xE86D);
+ if(info->sold_history>MC02_BOUNTY_MAX)return -15;
+ uint64_t sum=info->sold_history;
+ for(unsigned slot=0;slot<MC02_PURSUIT_SLOTS;slot++){
+  const unsigned char *rec=input+0xE2F5+0x38u*slot;
+  if(rec[0]==0xff)continue;
+  if(rec[0]!=(unsigned char)slot || rec[1]!=0xAA ||
+     rec[2]!=0x03 || rec[3]!=0 || rec[7]!=0 ||
+     rec[8]!=0 || rec[9]!=0 || rec[10]!=0xAA || rec[11]!=0xAA)return -16;
+  uint32_t b=be32(rec+0x10);
+  if(b>MC02_BOUNTY_MAX)return -15;
+  info->active_slots[info->active_count]=(unsigned char)slot;
+  info->active_bounty[info->active_count]=b;
+  info->active_count++;
+  sum+=b;
+  if(sum>MC02_BOUNTY_MAX)return -17;
+ }
+ if(!info->active_count)return -18;
+ info->total=(uint32_t)sum;
+ /* Prefer the current active car, following its identity record.
+  * The UI can select a different active slot explicitly with L/R. */
+ uint32_t active_car=be32(input+0x4034);
+ for(unsigned i=0;i<25;i++){
+  const unsigned char *car=input+0x6221+0x14u*i;
+  if(be32(car)==active_car && active_car!=0xFFFFFFFFu){
+   unsigned chosen=car[0x11];
+   for(unsigned j=0;j<info->active_count;j++)
+    if(info->active_slots[j]==chosen){info->preferred_index=j;return 0;}
+  }
+ }
+ info->preferred_index=0;return 0;
+}
+int mc02_read_bounty_info(const char *path,Mc02BountyInfo *info){
+ if(!info)return -3;
+ unsigned char *bytes=(unsigned char*)malloc(MC02_LEN);
+ if(!bytes)return -9;
+ int r=read_mc02(path,bytes);
+ if(!r)r=mc02_bounty_inspect(bytes,MC02_LEN,info);
+ free(bytes);return r;
+}
 int mc02_read_bounty(const char *path,uint32_t *bounty,uint32_t *offset){
  if(!bounty||!offset)return -3;
- unsigned char *buf=(unsigned char*)malloc(MC02_LEN);
- if(!buf)return -9;
- int r=read_mc02(path,buf);
- if(r){free(buf);return r;}
- r=mc02_verify(buf,MC02_LEN,NULL);
- if(r){free(buf);return r;}
- static const unsigned char mark[12]={
- 0x47,0x1c,0xb2,0x90,0x8b,0xe4,0xe2,0x55,0x47,0x33,0x00,0x31
- };
- int count=0;size_t hit=0;
- for(size_t i=0x34;i+sizeof(mark)+4<=MC02_LEN-16;i++){
-  if(memcmp(buf+i,mark,sizeof(mark))==0){count++;hit=i+sizeof(mark);}
- }
- if(count!=1){free(buf);return -14;}
- uint32_t bits=be32(buf+hit);
- float val;
- memcpy(&val,&bits,sizeof(val));
- if(!(val>=0.0f&&val<=999999999.0f)){free(buf);return -15;}
- uint32_t rounded=(uint32_t)(val+0.5f);
- float error=val-(float)rounded;
- if(error>0.001f||error< -0.001f){free(buf);return -15;}
- *bounty=rounded;*offset=(uint32_t)hit;
- free(buf);return 0;
+ Mc02BountyInfo info;
+ int r=mc02_read_bounty_info(path,&info);
+ if(r)return r;
+ *bounty=info.total;
+ *offset=0xE2F5u+info.active_slots[info.preferred_index]*0x38u+0x10u;
+ return 0;
+}
+int mc02_build_bounty(const unsigned char *input,size_t len,uint32_t expected_total,
+                      uint32_t desired_total,unsigned int active_index,unsigned char *output){
+ if(!input||!output||input==output)return -3;
+ if(desired_total>MC02_BOUNTY_MAX)return -4;
+ Mc02BountyInfo info;
+ int r=mc02_bounty_inspect(input,len,&info);
+ if(r)return r;
+ if(info.total!=expected_total)return -5;
+ if(info.total==desired_total)return -6;
+ if(active_index>=info.active_count)return -19;
+ uint32_t current=info.active_bounty[active_index];
+ uint32_t other=info.total-current;
+ if(desired_total<other)return -20;
+ uint32_t new_car=desired_total-other;
+ memcpy(output,input,len);
+ uint32_t at=0xE2F5u+info.active_slots[active_index]*0x38u+0x10u;
+ put_be32(output+at,new_car);
+ /* Exactly the proven dependency order of Cash editing. */
+ put_be32(output+0x10,ea_crc32(output+0x1c,8));
+ md5_sum(output+0x34,len-0x34-16,output+len-16);
+ put_be32(output+0x14,ea_crc32(output+0x24,len-0x24));
+ put_be32(output+0x18,ea_crc32(output,0x18));
+ Mc02BountyInfo after;
+ r=mc02_bounty_inspect(output,len,&after);
+ if(r||after.total!=desired_total||after.active_count!=info.active_count||
+    after.sold_history!=info.sold_history)return -7;
+ return 0;
 }
 static int available(const char *p){
  struct stat st;
  return stat(p,&st)!=0 && errno==ENOENT;
 }
-int mc02_apply_cash(const char *path,uint32_t expected_cash,uint32_t desired_cash,
-                    char *backup_path,size_t cap){
+static int mc02_apply_mode(const char *path,uint32_t expected_cash,uint32_t desired_cash,
+                           unsigned int active_index,int is_bounty,
+                           char *backup_path,size_t cap){
  if(!path||!backup_path||cap<64)return -3;
  backup_path[0]=0;
  size_t pl=strlen(path);
@@ -159,7 +219,8 @@ int mc02_apply_cash(const char *path,uint32_t expected_cash,uint32_t desired_cas
  if(!old||!next||!verify){free(old);free(next);free(verify);return -9;}
  int r=read_mc02(path,old);
  if(r)goto end;
- r=mc02_build(old,MC02_LEN,expected_cash,desired_cash,next);
+ r=is_bounty?mc02_build_bounty(old,MC02_LEN,expected_cash,desired_cash,active_index,next)
+             :mc02_build(old,MC02_LEN,expected_cash,desired_cash,next);
  if(r)goto end;
  char temp[1024],part[1024],bk[1024];
  if(snprintf(temp,sizeof(temp),"%s.nfslab.mc02.tmp",path)<0||
@@ -184,7 +245,9 @@ int mc02_apply_cash(const char *path,uint32_t expected_cash,uint32_t desired_cas
   remove(temp);r=-8;goto end;
  }
  r=read_mc02(path,verify);
- if(r||memcmp(next,verify,MC02_LEN)||mc02_verify(verify,MC02_LEN,0)){
+ Mc02BountyInfo checkinfo;
+ if(r||memcmp(next,verify,MC02_LEN)||
+    (is_bounty?mc02_bounty_inspect(verify,MC02_LEN,&checkinfo):mc02_verify(verify,MC02_LEN,0))){
   /* Attempt rollback. Leave oldpart + backup intact if anything fails. */
   char failed[1024];
   snprintf(failed,sizeof(failed),"%s.nfslab.mc02.failed",path);
@@ -196,15 +259,23 @@ int mc02_apply_cash(const char *path,uint32_t expected_cash,uint32_t desired_cas
 end:
  free(old);free(next);free(verify);return r;
 }
+int mc02_apply_cash(const char *path,uint32_t expected_cash,uint32_t desired_cash,
+                    char *backup_path,size_t cap){
+ return mc02_apply_mode(path,expected_cash,desired_cash,0,0,backup_path,cap);
+}
+int mc02_apply_bounty(const char *path,uint32_t expected_total,uint32_t desired_total,
+                      unsigned int active_index,char *backup_path,size_t cap){
+ return mc02_apply_mode(path,expected_total,desired_total,active_index,1,backup_path,cap);
+}
 const char *mc02_error(int code){
  switch(code){
   case 0:return "OK";
   case -1:return "UNSUPPORTED SAVE FORMAT/SIZE";
   case -2:return "HASH CHECK FAILED";
   case -3:return "INVALID INPUT";
-  case -4:return "CASH OUT OF RANGE";
-  case -5:return "CASH CHANGED SINCE SELECTION";
-  case -6:return "CASH ALREADY MATCHES";
+  case -4:return "VALUE OUT OF RANGE";
+  case -5:return "CURRENT VALUE CHANGED";
+  case -6:return "VALUE ALREADY MATCHES";
   case -7:return "OUTPUT HASH VALIDATION FAILED";
   case -8:return "SD CARD FILE ERROR";
   case -9:return "OUT OF MEMORY";
@@ -213,7 +284,12 @@ const char *mc02_error(int code){
   case -12:return "FILE VERIFICATION FAILED";
   case -13:return "RECOVER ORIGINAL FROM .oldpart OR .bak";
   case -14:return "BOUNTY RECORD NOT UNIQUE";
-  case -15:return "BOUNTY VALUE UNRECOGNIZED";
+  case -15:return "BOUNTY VALUE INVALID";
+  case -16:return "UNKNOWN GARAGE SLOT LAYOUT";
+  case -17:return "BOUNTY TOTAL TOO LARGE";
+  case -18:return "NO ACTIVE CAREER CAR";
+  case -19:return "SELECTED CAR NO LONGER PRESENT";
+  case -20:return "TARGET BELOW OTHER CARS / SOLD HISTORY";
   default:return "UNKNOWN ERROR";
  }
 }
