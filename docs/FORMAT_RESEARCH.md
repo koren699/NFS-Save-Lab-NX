@@ -56,6 +56,21 @@ The user supplied an updated MC02 career with visible **Bounty 45150** (previous
 
 The individual private source saves are not stored in this public repo.
 
+## Corrected Xbox 360 Bounty aggregation — one active car (2026-10-13)
+
+**Important correction:** the prior conclusion that two nonzero pursuit record values must mean two cars currently owned was wrong. The user currently has **one** car, and the binary confirms one live slot.
+
+Detailed private-save byte check (no private save contents published):
+
+- Xbox 360 profile's 25 pursuit records start at `0xE2F5`, stride `0x38`. In the original older snapshot, handles `0` and `1` were both live. In more recent snapshots, slot 0's handle becomes **`0xFF`**, meaning **empty / retired slot**, even though its stale bytes still contain `22550` at `0xE305`. Slot 1 remains live, handle `0x01`.
+- After that retirement, **sold-car history** Bounty is present separately as big-endian `u32=22550` at `0xE86D`, not at the stale `0xE305`. This closely matches the PC save format's sold history offset `0xE865` shifted by 8 bytes for this Xbox 360 profile. **Do not count the stale slot 0 bounty and sold-car history twice.**
+- The one live car's bounty is big-endian `u32` at **`0xE33D`**. In the earlier one-car profile it was `9000`, and in the new one-car profile it is `22600`.
+- Thus the correct *current* rating formula for this save: **sold-history 22550 + live car 22600 = 45150**. The previously displayed `45150.0` float32 at `0x015A` is a **cached/derived value**, not the game's authoritative rating field; editing only this float made the tool report 100000 but did not change the in-game rating.
+- New experimental test copy (kept private; not placed in this public repo) changes only `0xE33D` big-endian u32 from `22600` to `77450`, retains sold-history `22550` and the unmodified float cache, then recomputes MD5 and all three EA CRCs. Independent validation of the copy's integrity passes, but **game-side acceptance and actual 100000 total have not yet been checked.**
+- Crucial editor safety requirement: validate live pursuit slot occupancy using the handle, differentiate sold-history from stale empty slots, and reject ambiguous layouts. **Keep Edit Bounty disabled until the corrected test is game-tested.**
+
+Related PC format research: [garage_records.py](https://github.com/sprintstate/nfs-mw-save-editor/blob/main/nfs_mw_save_editor/core/garage_records.py) and [rap_sheet_totals.py](https://github.com/sprintstate/nfs-mw-save-editor/blob/main/nfs_mw_save_editor/core/rap_sheet_totals.py). The Xbox profile differs in endianness, size and offsets, but the byte-level examples above support this aggregation model.
+
 ## Not established
 - Actual Xbox 360 file internals (record IDs, compression/encryption, money/bounty/heat mapping).
 - In-app native v0.5 implementation successfully editing and loading its own Cash modifications (manual Python-equivalent test already succeeded in-game).
