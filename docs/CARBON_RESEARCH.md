@@ -1,5 +1,15 @@
 # NFS Carbon (original Xbox -> Nintendo Switch, nfsc-sw) save research
 
+## Carbon test writer v0.13.1: JDLZ alignment fix (2026-10-13)
+
+The user tested the first v0.13 Switch release on the authentic **$10,200** Carbon career save and encountered `UNKNOWN WRAPPER / FRAME LAYOUT`. The program correctly declined to create a candidate file; no live-save overwrite occurred.
+
+Root cause: the initial writer validated that every byte **after the declared JDLZ compressed length** must be zero. This was false for the real user save. Actual JDLZ compressed length is **3269 bytes (0xCC5)**, which has an **unaligned** end at `0x35885`. The three alignment bytes before the next four-byte boundary at `0x35888` are **`CE D5 C4`**, even though all bytes after that aligned boundary are zero. The older $5,000 save has a naturally aligned compressed length of **3096 bytes (0xC18)** and no alignment gap.
+
+The fix validates the JDLZ magic, decompressed size, wrapper lengths and **all bytes after the 4-byte-aligned end**, but does **not** require arbitrary alignment-gap bytes to be zero. The synthetic native-host regression now populates nonzero alignment bytes, so it catches the former mistake.
+
+Both private user saves were also checked independently without being committed to GitHub: their wrapper length relations match the updated validation, and a standalone JDLZ literal-only round-trip generates a **100,000 Cash** candidate of identical 262236-byte save size, decoded successfully from both baselines. **This verifies internal formatting only, not that the Carbon game accepts the modified save.** Direct overwriting stays disabled until an in-game test passes. The hbmenu 256x256 pixel icon and three RGB565 artwork panels remain bundled in final v0.13.1 NRO.
+
 ## First authentic Carbon profile: verified money discovery (2026-10-13)
 
 A private user-provided Xbox original Carbon save ZIP was inspected read-only: user reports **5,000 cash** and a **Chevrolet Camaro**. The actual game save is `ALIAS_...`, 262,236 bytes (`0x4005C`); it is accompanied by `SaveMeta.xbx` (profile-name metadata, 42 bytes) and `saveimage.xbx` (XPR0 image, 18,432 bytes). **Do not commit these personal game saves to the public repository.**
