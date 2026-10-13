@@ -52,5 +52,6 @@ with tempfile.TemporaryDirectory(prefix="mc02lab_") as d:
     assert validate(target.read_bytes())==14400
     assert source.read_bytes()==original
     duplicated=subprocess.run(command+["--create-test-copy"],capture_output=True,text=True)
-    assert duplicated.returncode!=0,"overwrote existing test copy"
+    assert duplicated.returncode!=0,"accepted an existing test-copy path"
+    assert target.read_bytes()==patched,"existing test copy was modified or deleted"
 print("PASS: MC02 strict validation, all checksums, balance patch, dry run, no-overwrite and source protection")
