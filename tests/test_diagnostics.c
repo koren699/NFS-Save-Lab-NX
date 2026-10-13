@@ -16,6 +16,7 @@ int main(void){
  assert(lab_diff_values(old,now,123456,234567,&d)==0);
  assert(d.matches==1 && d.entries[0].offset==44 && d.entries[0].big_endian==0);
  assert(d.changed_bytes==4 && d.changed_ranges==2);
+ assert(d.first_difference==44 && d.last_difference==69);
  assert(lab_diff_values(old,now,123456,123456,&d)==-4);
  remove(old);remove(now);
  puts("PASS: read-only diff and numeric-pair candidate finder");
