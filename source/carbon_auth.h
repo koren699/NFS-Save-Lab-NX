@@ -5,6 +5,13 @@
 /* Research: Original Xbox uses title-dependent HMAC-SHA1 save signing.
  * Port's default.xbe supplies game-specific 16-byte title signature key.
  * Returns 0 ONLY if all three 20-byte hashes match; fail closed otherwise. */
+/* Confirmed on BOTH genuine Original Xbox Carbon saves (5000, 10200):
+ * Three HMAC-SHA1 signatures use a 16-byte ALL-ZERO key, and the
+ * signed range lengths are stored at offsets 0x08 and 0x0C.
+ * All three signatures MUST match before any file can be modified. */
+int carbon_auth_verify_zero_buffer(const unsigned char *save,size_t size);
+int carbon_auth_sign_zero_buffer(unsigned char *save,size_t size);
+int carbon_auth_verify_zero_file(const char *save_path);
 int carbon_auth_verify_file(const char *save_path,const char *xbe_path);
 int carbon_auth_verify_buffer(const unsigned char *save,size_t size,
                               const unsigned char title_key[16]);
