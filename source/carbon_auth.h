@@ -10,5 +10,13 @@ int carbon_auth_verify_buffer(const unsigned char *save,size_t size,
                               const unsigned char title_key[16]);
 int carbon_auth_sign_buffer(unsigned char *save,size_t size,
                             const unsigned char title_key[16]);
+/* Switch recompilation's observed original-Xbox Carbon 20CM scheme:
+ * key = 16 zero bytes, lengths are the 0x08/0x0C header fields.
+ * Exact 3/3 HMAC matches on TWO untouched, game-generated profiles.
+ * Read-only entry point below; no game writes enabled in v0.15. */
+int carbon_auth_verify_switch_file(const char *save_path,unsigned *matched_tag_mask);
+int carbon_auth_verify_switch_buffer(const unsigned char *save,size_t size,
+                                     unsigned *matched_tag_mask);
+int carbon_auth_sign_switch_buffer(unsigned char *save,size_t size);
 const char *carbon_auth_error(int code);
 #endif
