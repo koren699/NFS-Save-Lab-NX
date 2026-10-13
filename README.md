@@ -1,21 +1,26 @@
-# NFS Save Lab NX v0.7
+# NFS Save Lab NX v0.9
 
-**Single-file homebrew:** Most Wanted, Underground 2 and Carbon pixel-art posters are now **embedded directly into `nfs_save_lab_nx.nro`**. The external poster resource folder from v0.6 is no longer needed.
+Nintendo Switch homebrew utility for fan ports of Need for Speed Most Wanted (2005), Underground 2 and Carbon.
 
-Place `nfs_save_lab_nx.nro` directly into `sdmc:/switch/` and launch with HBMenu.
+## New: Edit Bounty (Most Wanted Xbox 360, MC02)
 
-## Verified Most Wanted MC02 Cash
+The user confirmed a manually patched MC02 save with **100,000 in-game Bounty** successfully loaded on Switch. The new native universal editor reuses the verified 4-hash repair and backup process, but auto-discovers valid active pursuit records across all 25 slots. It computes the **authoritative Bounty total** as:
 
-Native Cash editing has already been successfully tested in-game with four repaired integrity checksums (MD5 + EA CRC1/2/3). Only validated 62688-byte MC02 saves are permitted. Original is backed up to `.nfslab.bakN`. Always close the game and independently back up the active save.
+```
+total = BE32(save[0xE86D:0xE871])   # sold-car bounty history
+      + sum(BE32(record[0x10:0x14]) for live pursuit records)
+```
 
-## New in v0.7: dynamic Bounty detector (READ ONLY)
+Pursuit records start at `0xE2F5`, stride `0x38`; an empty/retired record starts with handle `0xFF`, even when stale Bounty bytes persist. The previous float32 Bounty cache is **not** authoritative and must not be edited.
 
-Two independently supplied MC02 saves reported **Bounty 31550 (float32 BE @ 0x010E)** and **45150 (float32 BE @ 0x015A)**. The record moved, but a 12-byte preceding marker is identical and unique in both saves. The program uses this marker to find and display the current Bounty instead of assuming a fixed offset. Navigate Most Wanted → [LIVE] save → **BOUNTY INFO (MC02)**.
+**EDIT BOUNTY (MC02)**: enter desired total Bounty yourself. If multiple cars remain, L/R selects which valid active car record receives the difference. The editor attempts to default to the currently selected car based on the career car number, and refuses to reduce below the sum of sold-car history plus every other active car. It validates the structure, all 4 checksums, exact 62,688-byte MC02 file and expected prior value, creates a verified original backup before commit, then rewrites the target record and recalculates all integrity data.
 
-**Bounty modification remains disabled until a patched test save is accepted by the game.** Heat and other NFS ports remain diagnostic/read-only.
+Also included: proven **Edit Cash**, read-only scanning and snapshot comparisons, backup/restore, HD poster frontend.
 
-## Building
+**Important**: A successfully patched Bounty save was tested in-game, but the new v0.9 native UI and future-sale/multi-car cases have not yet been hardware validated. Before any test, completely close the game and make an independent backup of the whole save folder. Editing Underground 2 and Carbon remains unsupported.
 
-A Python 3 standard-library script (`tools/generate_poster_header.py`) processes `assets/posters_embedded.json` into a generated `source/poster_embedded.h` while `make` runs. The packed images are 80×100 indexed/palette art and are scaled by the custom pixel renderer on Switch. The end-user installation requires one NRO file, with no runtime network access or extra artwork.
+## Artwork installation
 
-[GitHub Actions builds](https://github.com/koren699/NFS-Save-Lab-NX/actions/workflows/build.yml) · [Українська інструкція](README_UA.md)
+The full v0.9 HD edition ships as a **single NRO** with RGB565 336×360 pixel-art posters appended in the NRO. Simply copy it to `sdmc:/switch/nfs_save_lab_nx.nro`. A bare GitHub Actions artifact contains the lower-quality fallback art unless separately packaged.
+
+[Ukrainian user guide](README_UA.md)
