@@ -17,6 +17,15 @@ int main(int argc,char **argv){
  assert(carbon_create_cash_test(original,10200,200000,dst,sizeof(dst))==-17);
  assert(carbon_read_cash(dst,&cash)==0 && cash==100000);
  assert(remove(dst)==0);
- puts("PASS: Carbon separate test save, arbitrary 100000 Cash, strict no overwrite");
+ char backup[1024];
+ assert(carbon_apply_cash(original,10201,200000,backup,sizeof(backup))==-11);
+ assert(carbon_read_cash(original,&cash)==0 && cash==10200);
+ assert(carbon_apply_cash(original,10200,200000,backup,sizeof(backup))==0);
+ assert(carbon_read_cash(original,&cash)==0 && cash==200000);
+ assert(carbon_read_cash(backup,&cash)==0 && cash==10200);
+ assert(carbon_apply_cash(original,10200,300000,backup,sizeof(backup))==-11);
+ assert(carbon_read_cash(original,&cash)==0 && cash==200000);
+ assert(remove(backup)==0);
+ puts("PASS: Carbon correctly signed 100000/200000 cash, verified original backup, stable save editing");
  return 0;
 }
