@@ -197,7 +197,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.11.0",WHITE);
+ txt(980,42,2,"BUILD 0.12.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -238,9 +238,10 @@ static void game_card(int idx,int x,int y){
 }
 static void dashboard(void){
  header("SELECT A GAME");
- txt(66,169,2,"L / R  CHOOSE GAME       A  OPEN SAVE BROWSER",MUTED);
+ txt(66,169,2,game==2?"L / R  CHOOSE GAME       A  OPEN CARBON CAREER":"L / R  CHOOSE GAME       A  OPEN SAVE BROWSER",MUTED);
  for(int i=0;i<3;i++)game_card(i,61+i*394,195);
- footer("L / R  CHANGE GAME       A  OPEN SAVE BROWSER       +  EXIT");
+ footer(game==2?"L / R  CHANGE GAME       A  VIEW CARBON CASH       +  EXIT":
+        "L / R  CHANGE GAME       A  OPEN SAVE BROWSER       +  EXIT");
 }
 static void info_panel(const char *heading,const char *subtitle){
  frame(64,182,752,420,0);
@@ -576,19 +577,29 @@ static void bounty_result_page(void){
  footer("B  BACK TO TOOL MENU");
 }
 static void carbon_cash_info_page(void){
- header("03 / CARBON CASH ANALYSIS");
- info_panel("CARBON CAREER BALANCE","ORIGINAL XBOX 20CM / JDLZ DECODED");
+ header("CARBON / CAREER");
+ frame(64,182,1150,420,0);
+ txt(94,211,3,"YOUR CAREER",WHITE);
+ label(95,269,"NEED FOR SPEED CARBON / ORIGINAL XBOX");
+ rect(95,307,684,4,accent);
  if(carbon_cash_error){
-  txt(90,317,2,carbon_error(carbon_cash_error),RED);
-  label(90,382,"CASH NOT READ FROM THIS FILE");
+  txt(94,349,2,carbon_error(carbon_cash_error),RED);
+  label(95,408,"CAN'T READ THIS PROFILE / NO CHANGES MADE");
  }else{
-  char cash[32];snprintf(cash,sizeof(cash),"%09u",carbon_cash_value);
-  txt(89,289,2,"DECOMPRESSED CASH:",MUTED);
-  big_number(90,351,cash);
-  label(90,439,"SOURCE: TABLE ENTRY 2287685084 / FIELD 7");
-  label(90,492,"READ ONLY UNTIL HASH + JDLZ WRITER VERIFIED");
+  txt(95,346,2,"CURRENT CASH",MUTED);
+  char number[48];snprintf(number,sizeof(number),"$%u",carbon_cash_value);
+  big_number(95,387,number);
  }
- footer("B  BACK TO TOOL MENU    /    NO CARBON WRITES");
+ rect(813,209,374,360,COLOR(22,31,37));
+ rect(813,209,6,360,accent);
+ txt(836,236,2,"PROFILE",MUTED);
+ if(nfiles && selected>=0 && selected<nfiles)
+  cliptext(836,280,2,files[selected].name,WHITE,20);
+ txt(836,358,2,"EDITOR STATUS",MUTED);
+ pill(836,396,"READ ONLY",accent);
+ label(836,474,"SAVE IS NOT MODIFIED");
+ footer(nfiles==1?"B  BACK TO GAMES       CARBON: CASH INFO":
+       "B  BACK TO CAREERS       CARBON: CASH INFO");
 }
 static void draw(void){
  uint32_t stride;
@@ -624,6 +635,19 @@ static int suitable(const char *name){
  for(int i=0;bad[i];i++){size_t n=strlen(name),s=strlen(bad[i]);if(n>=s&&!strcasecmp(name+n-s,bad[i]))return 0;}
  return 1;
 }
+/* Original Xbox Carbon uses ALIAS_<profile> for career data.
+ * TitleMeta.xbx, TitleImage.xbx, SaveMeta.xbx etc. are never a career.
+ * Verify the 20CM magic before showing ALIAS candidates. */
+static int carbon_is_career(const char *path,const char *name,off_t length){
+ if(strncasecmp(name,"ALIAS_",6)!=0 || length<64 ||
+    length>(off_t)LAB_MAX_FILE)return 0;
+ FILE *f=fopen(path,"rb");if(!f)return 0;
+ unsigned char head[8];
+ int ok=fread(head,1,sizeof(head),f)==sizeof(head);
+ if(fclose(f)!=0)ok=0;
+ return ok && memcmp(head,"20CM",4)==0 &&
+        get_le32(head+4)==(uint32_t)length;
+}
 static void crawl(const char *root,int depth,int backup){
  if(depth>7||nfiles>=MAX_FILES)return;
  DIR *d=opendir(root);if(!d)return;
@@ -637,6 +661,7 @@ static void crawl(const char *root,int depth,int backup){
    if(!strcasecmp(ent->d_name,"Headers"))continue;
    crawl(p,depth+1,backup);continue;}
   if(!S_ISREG(st.st_mode)||st.st_size<32||st.st_size>(off_t)LAB_MAX_FILE||!suitable(ent->d_name))continue;
+   if(game==2&&!carbon_is_career(p,ent->d_name,st.st_size))continue;
   SaveFile *f=&files[nfiles++];
   snprintf(f->path,sizeof(f->path),"%s",p);snprintf(f->name,sizeof(f->name),"%s",ent->d_name);
   f->size=(uint32_t)st.st_size;f->backup=backup;
@@ -646,7 +671,11 @@ static void crawl(const char *root,int depth,int backup){
 static void discover(void){
  nfiles=0;selected=0;
  for(int r=0;game_root[game][r];r++)if(is_dir(game_root[game][r]))crawl(game_root[game][r],0,game==0&&r>=2);
- snprintf(status_line,sizeof(status_line),"%d FILES FOUND / CHOOSE A CANDIDATE SAVE",nfiles);
+ if(game==2)
+  snprintf(status_line,sizeof(status_line),nfiles?
+      "%d CARBON CAREER PROFILE(S) FOUND":"NO CARBON CAREER PROFILES FOUND",nfiles);
+ else
+  snprintf(status_line,sizeof(status_line),"%d FILES FOUND / CHOOSE A CANDIDATE SAVE",nfiles);
 }
 static uint32_t change(uint32_t v,int sign,int digit_place){
  uint32_t step=1;for(int i=0;i<digit_place;i++)step*=10;
@@ -666,16 +695,30 @@ static void change_number(u64 key,uint32_t *v){
 }
 static void handle(u64 key,u64 held){
  if(screen==0){
-  if(key&HidNpadButton_L)game=(game+2)%3;
-  if(key&HidNpadButton_R)game=(game+1)%3;
-  if(key&HidNpadButton_A){discover();screen=1;}
+  if(key&HidNpadButton_L){game=(game+2)%3;status_line[0]=0;}
+  if(key&HidNpadButton_R){game=(game+1)%3;status_line[0]=0;}
+  if(key&HidNpadButton_A){
+   discover();
+   if(game==2 && nfiles==1){
+    carbon_cash_error=carbon_read_cash(files[0].path,&carbon_cash_value);
+    status_line[0]=0;screen=22;
+   }else{
+    if(game==2 && nfiles>0)status_line[0]=0;
+    screen=1;
+   }
+  }
  }else if(screen==1){
-  if(key&HidNpadButton_B)screen=0;
+  if(key&HidNpadButton_B){screen=0;status_line[0]=0;}
   else if(key&HidNpadButton_Up&&selected>0)selected--;
   else if(key&HidNpadButton_Down&&selected<nfiles-1)selected++;
   else if(key&HidNpadButton_A&&nfiles){
-   old_val=0;new_val=0;digit=4;action=0;screen=7;
-   snprintf(status_line,sizeof(status_line),"SELECTED: %.130s",files[selected].name);
+   if(game==2){
+    carbon_cash_error=carbon_read_cash(files[selected].path,&carbon_cash_value);
+    status_line[0]=0;screen=22;
+   }else{
+    old_val=0;new_val=0;digit=4;action=0;screen=7;
+    snprintf(status_line,sizeof(status_line),"SELECTED: %.130s",files[selected].name);
+   }
   }
  }else if(screen==7){
   if(key&HidNpadButton_B)screen=1;
@@ -827,7 +870,7 @@ static void handle(u64 key,u64 held){
    }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR THEN PRESS A");
   }
  }else if(screen==21&&key&HidNpadButton_B)screen=7;
- else if(screen==22&&key&HidNpadButton_B)screen=7;
+ else if(screen==22&&key&HidNpadButton_B){screen=nfiles==1?0:1;status_line[0]=0;}
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
