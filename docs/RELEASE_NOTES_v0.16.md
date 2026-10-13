@@ -2,7 +2,7 @@
 
 **Nintendo Switch homebrew save editor for Most Wanted (2005), Underground 2, and Carbon.** All four editing features have been successfully tested in-game on real hardware.
 
-> **Download:** Under **Assets**, choose `nfs_save_lab_nx_v0.16.nro` (ready to place on your Switch) or the Full HD ZIP. **Do not use “Source code (zip)”**—it does not contain the ready-to-run editor. The app requires the corresponding fan-made Switch game ports; it does not edit PC saves.
+> **Download:** Under **Assets**, choose `nfs_save_lab_nx.nro` (ready to place on your Switch) or the Full HD ZIP. **Do not use “Source code (zip)”**—it does not contain the ready-to-run editor. The app requires the corresponding fan-made Switch game ports; it does not edit PC saves.
 
 ## Screenshots / Скриншоти / Скриншоты
 
@@ -84,4 +84,4 @@
 
 Not affiliated with Electronic Arts or Nintendo. Back up your saves before editing. / Не пов’язаний з Electronic Arts або Nintendo. Зробіть резервну копію. / Не связан с Electronic Arts или Nintendo. Делайте резервные копии.
 
-**Links / Посилання / Ссылки:** [Project README (EN)](../../README.md) · [Українська](../../README_UA.md) · [Русский](../../README_RU.md)
+**Links / Посилання / Ссылки:** [Project README (EN)](https://github.com/koren699/NFS-Save-Lab-NX/blob/main/README.md) · [Українська](https://github.com/koren699/NFS-Save-Lab-NX/blob/main/README_UA.md) · [Русский](https://github.com/koren699/NFS-Save-Lab-NX/blob/main/README_RU.md)
