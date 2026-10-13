@@ -32,6 +32,11 @@ def profile(money):
     out[:4]=b"20CM"
     struct.pack_into("<I",out,4,TOTAL)
     out[START:START+len(compressed)]=compressed
+    # Real Carbon 10,200 save has 3 NONZERO JDLZ alignment bytes
+    # immediately after its 3,269-byte compressed block.
+    aligned=(len(compressed)+3)&~3
+    for i in range(len(compressed),aligned):
+        out[START+i]=b"\xce\xd5\xc4"[i-len(compressed)]
     out[0x34ba8:0x34bac] = bytes.fromhex("22114455")
     struct.pack_into("<I",out,0x34bac,UNPACK)
     aligned=(len(compressed)+3)&~3
