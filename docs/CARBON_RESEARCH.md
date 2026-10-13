@@ -1,5 +1,23 @@
 # NFS Carbon (original Xbox -> Nintendo Switch, nfsc-sw) save research
 
+## VERIFIED: original Xbox Carbon on Switch uses zero-key HMAC with dynamic ranges (2026-10-13)
+
+**Cryptographically confirmed on BOTH independent game-generated, untouched user saves (5,000 and 10,200 cash).** The v0.14 read-only UI incorrectly displayed `XBOX HMAC DOES NOT MATCH` because it tested a derived XBE certificate key and 8-byte first section copied from Xbox Original *Most Wanted*. Carbon's actual data is as follows:
+
+- File magic `20CM` (original Xbox) with LE32 file length at `0x04` = 262236 (`0x4005c`).
+- First-section length LE32 at `0x08` is **16** bytes.
+- Second-section length LE32 at `0x0C` is **262144** bytes.
+- **HMAC-SHA1 signing key for the currently tested Switch recompilation save files is 16 ZERO bytes**, not the title-derived key from `default.xbe`. This is directly observed from 6 exact matches; do not infer it for every original Xbox game or all releases.
+- The three 20-byte hashes are computed in dependency order:
+  1. `save[0x10:0x24] = HMAC_SHA1(00 * 16, save[0x4C:0x5C])`.
+  2. `save[0x24:0x38] = HMAC_SHA1(00 * 16, save[0x5C:0x4005C])`.
+  3. `save[0x38:0x4C] = HMAC_SHA1(00 * 16, save[0:0x38])` (includes first two updated hashes).
+- **All six digests are byte-for-byte identical** to the stored 20-byte digest fields in the TWO originals: six / six, no approximation. Both original game-save files remain private.
+- Python independently signed two existing compact-JDLZ candidates based on the 10,200 save. In candidate A, uncompressed career data matches original at **every one of 32,768 bytes**, and Cash remains 10,200. In candidate B, the extracted Cash field is 100,000. Both are exactly 262236 bytes, regenerate all 3 HMACs, and independently reverify each hash; Game region MD5 remains correct and unchanged. This validates cryptographic integrity, but **the game has NOT yet been tested with signed A or signed B**. They are in a *private* diagnostic ZIP delivered in chat, not repo.
+- If signed A loads in game, continue to signed B. If A fails, stop: game may impose compressor-specific restrictions or additional integrity checks. Keep live Carbon editing disabled until game-side validation succeeds.
+
+Code: `source/carbon_auth.c` now exposes `carbon_auth_verify_switch_buffer`, `carbon_auth_sign_switch_buffer`, and `carbon_auth_verify_switch_file` using exactly these observed rules. Independent synthetic-vector/tamper tests are in `tests/test_carbon_auth.c`.
+
 ## Original-Xbox HMAC hypothesis and verification implementation — v0.14 (2026-10-13)
 
 Major reversal of prior assumption: raw Original Xbox Carbon save `20CM` at `0x10..0x4B` contains **60 bytes**, matching **three 20-byte HMAC-SHA1 tags** at offsets `0x10`, `0x24`, `0x38`. Our previous interpretation as three EA CRC32 values (at +0x10/+0x14/+0x18) incorrectly splits the first HMAC digest. This exact 3-tag signing pattern is documented in a *working Original Xbox Most Wanted* save editor by [focanmess/NFSMW_Xbox_Save](https://github.com/focanmess/NFSMW_Xbox_Save/blob/master/nfsmw_xbox_save.py):
