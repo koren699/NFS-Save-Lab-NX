@@ -1,38 +1,58 @@
-# NFS Save Lab NX v0.10 — Carbon save discovery
+# NFS Save Lab NX
 
-v0.10 corrects the native **Need for Speed Carbon (Original Xbox)** save-directory discovery for `antoxa2584x/nfsc-sw`: `sdmc:/switch/nfscx/save/`, including the Xbox `UserData` and `TitleData` mappings. The read-only Carbon browser shows candidate file name, size and first eight bytes (hex); excludes virtual disk `*.img` files. It retains old `game/UDATA` as a fallback, but that is **not** the canonical live save location.
+**Nintendo Switch homebrew save editor** for the fan-made Switch ports of **Need for Speed: Most Wanted (2005)**, **Underground 2**, and **Carbon**.
 
-**Carbon editing remains disabled** pending format, integrity and Cash-location validation on actual user files. Most Wanted MC02 Cash+Bounty features remain unchanged.
+**Current version: v0.16** · Tested on a real Nintendo Switch with all three games.
 
-The conversation-distributed HD package embeds the three 336×360 RGB565 posters into the same NRO. The GitHub Actions default artifact retains fallback poster art without post-build packaging.
+[🇺🇦 Українська](README_UA.md) · [🇬🇧 English](README.md) · [🇷🇺 Русский](README_RU.md)
 
-See [Carbon format research](docs/CARBON_RESEARCH.md). Keep independent backups of live saves.
+## Supported games
 
----
+| Game / Switch port | Edit Cash | Edit Bounty | Save format |
+|---|---|---|---|
+| Need for Speed: Most Wanted (2005) | ✅ | ✅ | Xbox 360 MC02 |
+| Need for Speed: Underground 2 | ✅ | — | Original Xbox 20CM |
+| Need for Speed: Carbon | ✅ | — | Original Xbox 20CM |
 
-# NFS Save Lab NX v0.9
+This utility targets the **specific community Switch ports** of the games, not the Windows/PC releases or other console editions. Compatibility with every future port version or every save is not guaranteed.
 
-Nintendo Switch homebrew utility for fan ports of Need for Speed Most Wanted (2005), Underground 2 and Carbon.
+## Features
 
-## New: Edit Bounty (Most Wanted Xbox 360, MC02)
+- Select a game using one of three high-quality pixel-art poster cards.
+- Automatically detect supported career save files and display the current balance.
+- Set a **custom Cash amount** for all three games.
+- Edit accumulated **Bounty** in Most Wanted. Includes active-car and sold-car history accounting; use **L/R** to choose the active car when several are present.
+- Verify the correct game-specific integrity data (MC02 MD5/EA CRC32 for Most Wanted; three HMAC-SHA1 signatures for the Original Xbox games).
+- **Create a verified `.nfslab.bakN` backup before modifying a save**, verify the output and provide recovery paths.
+- One `.nro` with pixel-art artwork and Homebrew Menu icon in the **full HD release package**.
 
-The user confirmed a manually patched MC02 save with **100,000 in-game Bounty** successfully loaded on Switch. The new native universal editor reuses the verified 4-hash repair and backup process, but auto-discovers valid active pursuit records across all 25 slots. It computes the **authoritative Bounty total** as:
+## Install and use
 
-```
-total = BE32(save[0xE86D:0xE871])   # sold-car bounty history
-      + sum(BE32(record[0x10:0x14]) for live pursuit records)
-```
+1. Download the **full HD** `nfs_save_lab_nx.nro` from [Releases](https://github.com/koren699/NFS-Save-Lab-NX/releases) once the release is published.
+2. Copy it to `sdmc:/switch/nfs_save_lab_nx.nro` on your Switch microSD card.
+3. **Close the game completely**, then make an independent backup of the *entire game save folder* outside the active game directory.
+4. Launch **NFS Save Lab NX** through Homebrew Menu.
+5. Choose a game → career save → **Edit Cash**, or **Edit Bounty** in Most Wanted.
+6. Set your desired amount with the directional buttons, press **A**, and confirm using **ZL + ZR + A**.
+7. Load your career in the game and check the result. Keep the original backup until you confirm successful loading.
 
-Pursuit records start at `0xE2F5`, stride `0x38`; an empty/retired record starts with handle `0xFF`, even when stale Bounty bytes persist. The previous float32 Bounty cache is **not** authoritative and must not be edited.
+> **Important:** The full HD `.nro` includes the custom icon and three high-resolution posters. A standard automatic GitHub Actions build may contain only fallback artwork. Download the release attachment labeled *Full HD*.
 
-**EDIT BOUNTY (MC02)**: enter desired total Bounty yourself. If multiple cars remain, L/R selects which valid active car record receives the difference. The editor attempts to default to the currently selected car based on the career car number, and refuses to reduce below the sum of sold-car history plus every other active car. It validates the structure, all 4 checksums, exact 62,688-byte MC02 file and expected prior value, creates a verified original backup before commit, then rewrites the target record and recalculates all integrity data.
+## Technical information
 
-Also included: proven **Edit Cash**, read-only scanning and snapshot comparisons, backup/restore, HD poster frontend.
+- **Most Wanted Xbox 360:** 62,688-byte MC02 profiles, verified MD5 + EA CRC32 integrity.
+- **Underground 2 Original Xbox:** 53,868-byte 20CM profiles, Cash stored as a little-endian integer and signed with 3 × HMAC-SHA1.
+- **Carbon Original Xbox:** 262,236-byte 20CM profiles with a compact JDLZ career data block and 3 × HMAC-SHA1.
+- An unsupported or invalid save is rejected instead of being blindly patched.
 
-**Important**: A successfully patched Bounty save was tested in-game, but the new v0.9 native UI and future-sale/multi-car cases have not yet been hardware validated. Before any test, completely close the game and make an independent backup of the whole save folder. Editing Underground 2 and Carbon remains unsupported.
+All three games' Cash editing and Most Wanted Bounty editing have been confirmed in-game by the project's tester. Backups remain essential.
 
-## Artwork installation
+## Documentation
 
-The full v0.9 HD edition ships as a **single NRO** with RGB565 336×360 pixel-art posters appended in the NRO. Simply copy it to `sdmc:/switch/nfs_save_lab_nx.nro`. A bare GitHub Actions artifact contains the lower-quality fallback art unless separately packaged.
+- [Ukrainian guide](README_UA.md) · [Russian guide](README_RU.md)
+- [v0.16 release notes in three languages](docs/RELEASE_NOTES_v0.16.md)
+- [Most Wanted format research](docs/FORMAT_RESEARCH.md)
+- [Carbon research](docs/CARBON_RESEARCH.md)
+- [Underground 2 research](docs/UNDERGROUND2_RESEARCH.md)
 
-[Ukrainian user guide](README_UA.md)
+Community-made, unofficial homebrew. **Not affiliated with or endorsed by Electronic Arts, Nintendo, or the Need for Speed publishers.** You are responsible for backing up your own save data.
