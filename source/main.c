@@ -52,6 +52,9 @@ static int backup_error=0;
 static int cash_error=0;
 static int bounty_error=0;
 static uint32_t bounty_detected=0,bounty_offset=0;
+static Mc02BountyInfo bounty_info;
+static unsigned bounty_selected=0;
+static int bounty_write_error=0;
 static char status_line[190]="READY TO SCAN LOCAL SAVES";
 static Framebuffer fb;
 static uint32_t *pixels;
@@ -190,7 +193,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.8.0",WHITE);
+ txt(980,42,2,"BUILD 0.9.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -209,7 +212,7 @@ static void big_number(int x,int y,const char *s){
 }
 static void footer(const char *shortline){
  label(67,648,shortline);
- label(67,685,"CASH: VERIFIED MC02 ONLY   /   BOUNTY + HEAT: READ ONLY");
+ label(67,685,"MOST WANTED: CASH + BOUNTY MC02    /    HEAT: READ ONLY");
 }
 static void game_card(int idx,int x,int y){
  int active=(game==idx),w=356,h=426;
@@ -266,18 +269,20 @@ static void files_page(void){
  footer("UP / DOWN  SELECT       A  CONTINUE       B  BACK");
 }
 static void action_page(void){
- header("02 / SAFE SAVE TOOLS");
- info_panel("CHOOSE A TOOL","GAME FORMAT GATES PREVENT UNSAFE MODIFICATIONS");
- const char *entries[]={"EDIT CASH (MC02)","CASH SCAN","BOUNTY INFO (MC02)","HEAT SCAN",
-                       "COMPARE SNAPSHOTS","CREATE BACKUP","RESTORE BACKUP"};
- const char *notes[]={"MOST WANTED ONLY","SEARCH READ ONLY","FIND CHASE BOUNTY",
-                     "SEARCH READ ONLY","COMPARE TWO SAVES","KEEP AN ORIGINAL","RESTORE SNAPSHOT"};
- for(int i=0;i<7;i++){
-  int y=276+i*44,sel=i==action;
-  if(sel){rect(78,y-5,725,39,COLOR(43,64,63));rect(78,y-5,5,39,accent);}
-  char text[80];snprintf(text,sizeof(text),"%02d   %s",i+1,entries[i]);
+ header("02 / SAVE TOOLS");
+ info_panel("CHOOSE A TOOL","MC02 FORMAT, CRC + MD5 VERIFIED BEFORE WRITING");
+ const char *entries[]={"EDIT CASH (MC02)","EDIT BOUNTY (MC02)","BOUNTY INFO",
+                       "CASH SCAN","HEAT SCAN","COMPARE SNAPSHOTS",
+                       "CREATE BACKUP","RESTORE BACKUP"};
+ const char *notes[]={"CHOOSE YOUR CASH","SOLD + LIVE CARS",
+                     "VIEW PURSUIT TOTAL","SCAN READ ONLY","SCAN READ ONLY",
+                     "BEFORE AND AFTER","KEEP AN ORIGINAL","RECOVER ORIGINAL"};
+ for(int i=0;i<8;i++){
+  int y=273+i*39,sel=i==action;
+  if(sel){rect(78,y-5,725,36,COLOR(43,64,63));rect(78,y-5,5,36,accent);}
+  char text[85];snprintf(text,sizeof(text),"%02d   %s",i+1,entries[i]);
   txt(94,y,2,text,sel?WHITE:MUTED);
-  cliptext(454,y,2,notes[i],sel?accent:MUTED,19);
+  cliptext(461,y,2,notes[i],sel?accent:MUTED,19);
  }
  footer("UP / DOWN  TOOL       A  OPEN       B  FILES");
 }
@@ -469,18 +474,71 @@ static void cash_result_page(void){
 }
 static void bounty_view_page(void){
  header("03 / BOUNTY DATA");
- info_panel("CHASE RATING","READ ONLY / REGISTERED MC02 RECORD");
+ info_panel("ACTUAL CHASE RATING","LIVE CARS PLUS SOLD-CAR HISTORY");
  if(bounty_error){
-   txt(89,310,2,mc02_error(bounty_error),RED);
-   label(89,392,"NOT SUPPORTED FOR THIS SAVE FILE");
+  txt(91,320,2,mc02_error(bounty_error),RED);
  }else{
-   txt(90,295,2,"BOUNTY:",MUTED);
-   char b[70];snprintf(b,sizeof(b),"%09u",bounty_detected);
-   big_number(91,359,b);
-   snprintf(b,sizeof(b),"RECORD OFFSET: 0x%04X",bounty_offset);
-   txt(92,457,2,b,accent);
-   label(91,513,"READ ONLY UNTIL EDITED BOUNTY IS GAME-TESTED");
+  char b[100];
+  snprintf(b,sizeof(b),"%09u",bounty_info.total);
+  big_number(90,308,b);
+  snprintf(b,sizeof(b),"SOLD CARS: %u",bounty_info.sold_history);
+  txt(91,405,2,b,MUTED);
+  snprintf(b,sizeof(b),"ACTIVE CARS: %u",bounty_info.active_count);
+  txt(91,446,2,b,accent);
+  snprintf(b,sizeof(b),"CURRENT CAR SLOT: %u",bounty_info.active_slots[bounty_info.preferred_index]+1);
+  txt(91,488,2,b,WHITE);
+  label(91,536,"CACHE IS NOT THE ACTUAL BOUNTY SOURCE");
  }
+ footer("B  BACK TO TOOLS");
+}
+static void bounty_edit_page(void){
+ header("03 / EDIT BOUNTY");
+ info_panel("SET TOTAL RATING","SOLD HISTORY REMAINS UNCHANGED");
+ char b[90];
+ snprintf(b,sizeof(b),"CURRENT TOTAL: %u",old_val);
+ txt(90,277,2,b,WHITE);
+ snprintf(b,sizeof(b),"SOLD HISTORY: %u",bounty_info.sold_history);
+ txt(90,311,2,b,MUTED);
+ snprintf(b,sizeof(b),"%09u",new_val);
+ big_number(91,347,b);
+ rect(91+(8-digit)*40,398,37,5,accent);
+ unsigned slot=bounty_info.active_slots[bounty_selected];
+ uint32_t minimum=old_val-bounty_info.active_bounty[bounty_selected];
+ snprintf(b,sizeof(b),"L / R  CAR %u / %u  (SLOT %u)",
+          bounty_selected+1,bounty_info.active_count,slot+1);
+ txt(91,437,2,b,accent);
+ snprintf(b,sizeof(b),"MINIMUM FOR THIS CAR: %u",minimum);
+ txt(91,476,2,b,new_val<minimum?RED:MUTED);
+ label(91,521,"UP/DOWN: VALUE    LEFT/RIGHT: DIGIT");
+ footer("A  REVIEW EDIT       B  BACK       L/R  SELECT CAR");
+}
+static void bounty_confirm_page(void){
+ header("04 / CONFIRM BOUNTY EDIT");
+ info_panel("VERIFY RATING","ONE ACTIVE CAR CHANGES, HISTORY IS PRESERVED");
+ char b[105];
+ snprintf(b,sizeof(b),"TOTAL: %u -> %u",old_val,new_val);
+ txt(91,294,2,b,WHITE);
+ snprintf(b,sizeof(b),"SOLD: %u / ACTIVE CARS: %u",
+          bounty_info.sold_history,bounty_info.active_count);
+ txt(91,350,2,b,MUTED);
+ snprintf(b,sizeof(b),"EDIT CAREER SLOT %u",bounty_info.active_slots[bounty_selected]+1);
+ txt(91,393,2,b,accent);
+ txt(91,443,2,"ORIGINAL SAVED TO .nfslab.bakN",WHITE);
+ txt(91,478,2,"REBUILD MD5 + ALL THREE EA CRCS",WHITE);
+ txt(91,533,2,"HOLD ZL + ZR AND PRESS A",accent);
+ footer("ZL + ZR + A  WRITE       B  CANCEL");
+}
+static void bounty_result_page(void){
+ header("05 / BOUNTY EDIT RESULT");
+ info_panel(bounty_write_error?"BOUNTY NOT UPDATED":"RATING UPDATED",
+            "LIVE CAR PURSUIT RECORD");
+ txt(91,327,2,bounty_write_error?mc02_error(bounty_write_error):
+                  "VALIDATED MC02 SAVE WRITTEN",bounty_write_error?RED:accent);
+ if(!bounty_write_error){
+  char b[80];snprintf(b,sizeof(b),"NEW TOTAL: %u",new_val);
+  txt(91,393,3,b,WHITE);
+  label(91,474,"ORIGINAL IS IN .nfslab.bakN");
+ }else label(91,467,"CHECK ORIGINAL / BACKUP BEFORE RETRYING");
  footer("B  BACK TO TOOL MENU");
 }
 static void draw(void){
@@ -499,7 +557,10 @@ static void draw(void){
  case 14:comparison_result_page();break;
  case 15:cash_edit_page();break;case 16:cash_confirm_page();break;
  case 17:cash_result_page();break;
- case 18:bounty_view_page();break;}
+ case 18:bounty_view_page();break;
+ case 19:bounty_edit_page();break;
+ case 20:bounty_confirm_page();break;
+ case 21:bounty_result_page();break;}
  if(status_line[0]){
   rect(64,605,1150,23,COLOR(36,45,50));
   cliptext(73,609,2,status_line,WHITE,68);
@@ -569,41 +630,50 @@ static void handle(u64 key,u64 held){
  }else if(screen==7){
   if(key&HidNpadButton_B)screen=1;
   else if(key&HidNpadButton_Up&&action>0)action--;
-  else if(key&HidNpadButton_Down&&action<6)action++;
+  else if(key&HidNpadButton_Down&&action<7)action++;
   else if(key&HidNpadButton_A){
    if(action==0){
     if(game!=0||files[selected].backup){
-     snprintf(status_line,sizeof(status_line),"CASH EDIT ONLY FOR LIVE MOST WANTED MC02 FILES");
-    }else {
+     snprintf(status_line,sizeof(status_line),"CASH EDIT: LIVE MOST WANTED MC02 ONLY");
+    }else{
      cash_error=mc02_read_cash(files[selected].path,&old_val);
      if(cash_error)snprintf(status_line,sizeof(status_line),
-       "EDIT BLOCKED: %s",mc02_error(cash_error));
-     else{new_val=old_val;digit=4;screen=15;}
+          "EDIT BLOCKED: %s",mc02_error(cash_error));
+     else {new_val=old_val;digit=4;screen=15;}
     }
-   }else if(action==2){
+   }else if(action==1||action==2){
     if(game!=0){
-     bounty_error=-1;bounty_detected=0;bounty_offset=0;
+     bounty_error=-1;
     }else{
-     bounty_error=mc02_read_bounty(files[selected].path,
-                                   &bounty_detected,&bounty_offset);
+     bounty_error=mc02_read_bounty_info(files[selected].path,&bounty_info);
     }
-    screen=18;
-   }else if(action==1||action==3){
-    metric=action-1;old_val=metric==2?1:0;digit=4;screen=2;
-   }else if(action==4){
-    metric=0;load_backups();screen=11;
-   }else if(action==5){
-    if(files[selected].backup){
-     snprintf(status_line,sizeof(status_line),"CANNOT BACK UP PORT'S MIRROR AS A LIVE SAVE");
+    if(action==2){screen=18;}
+    else if(files[selected].backup){
+     snprintf(status_line,sizeof(status_line),"BOUNTY EDIT: SELECT A LIVE SAVE, NOT A COPY");
+    }else if(bounty_error){
+     snprintf(status_line,sizeof(status_line),"BOUNTY EDIT BLOCKED: %s",mc02_error(bounty_error));
     }else{
+     bounty_selected=bounty_info.preferred_index;
+     old_val=bounty_info.total;new_val=old_val;
+     digit=4;screen=19;
+    }
+   }else if(action==3||action==4){
+    metric=action==3?0:2;
+    old_val=metric==2?1:0;digit=4;screen=2;
+   }else if(action==5){
+    metric=0;load_backups();screen=11;
+   }else if(action==6){
+    if(files[selected].backup)
+      snprintf(status_line,sizeof(status_line),"BACKUP: PLEASE SELECT LIVE SAVE");
+    else{
      backup_result=0;
      backup_error=lab_make_backup(files[selected].path,backup_path,sizeof(backup_path));
      screen=10;
     }
    }else{
-    if(files[selected].backup){
-     snprintf(status_line,sizeof(status_line),"READ-ONLY MIRROR: RESTORE DISABLED");
-    }else{load_backups();screen=8;}
+    if(files[selected].backup)
+     snprintf(status_line,sizeof(status_line),"RESTORE: SELECT LIVE SAVE");
+    else{load_backups();screen=8;}
    }
   }
  }else if(screen==2){
@@ -678,6 +748,32 @@ static void handle(u64 key,u64 held){
   }
  }else if(screen==17&&key&HidNpadButton_B)screen=7;
  else if(screen==18&&key&HidNpadButton_B)screen=7;
+ else if(screen==19){
+  if(key&HidNpadButton_B)screen=7;
+  else if(key&HidNpadButton_L){
+   bounty_selected=bounty_selected?bounty_selected-1:bounty_info.active_count-1;
+  }else if(key&HidNpadButton_R){
+   bounty_selected=(bounty_selected+1)%bounty_info.active_count;
+  }else if(key&HidNpadButton_A){
+   uint32_t min_value=old_val-bounty_info.active_bounty[bounty_selected];
+   if(new_val<min_value)
+    snprintf(status_line,sizeof(status_line),"TOO LOW: MINIMUM %u (OTHER CARS + SOLD)",min_value);
+   else if(new_val==old_val)
+    snprintf(status_line,sizeof(status_line),"NEW BOUNTY MUST DIFFER FROM CURRENT");
+   else screen=20;
+  }else{int before=metric;metric=0;change_number(key,&new_val);metric=before;}
+ }else if(screen==20){
+  if(key&HidNpadButton_B)screen=19;
+  else if(key&HidNpadButton_A){
+   if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
+    bounty_write_error=mc02_apply_bounty(files[selected].path,old_val,new_val,
+                        bounty_selected,backup_path,sizeof(backup_path));
+    screen=21;
+    snprintf(status_line,sizeof(status_line),bounty_write_error?
+            "BOUNTY FAILED: CHECK BACKUP":"BOUNTY UPDATED: VERIFIED BACKUP CREATED");
+   }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR THEN PRESS A");
+  }
+ }else if(screen==21&&key&HidNpadButton_B)screen=7;
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
