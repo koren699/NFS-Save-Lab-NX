@@ -163,7 +163,13 @@ static int make_cash_candidate(const unsigned char *input,size_t len,
  uint32_t align4=(uint32_t)((prevlen+3u)&~3u);
  if(le32(input+0x4c)!=align4+0x4cu ||
     le32(input+frame+8)!=align4+0x18u)return -13;
- for(size_t i=base+prevlen;i<len;i++)if(input[i])return -13;
+ /* Authentic 10,200-cash save ends its JDLZ stream at 0xCC5 bytes,
+  * then contains CE D5 C4 in the 3-byte alignment gap.
+  * Those bytes are NOT required to be zero. Only bytes AFTER the
+  * 4-byte-aligned stream are reserved and must be empty. */
+ size_t prev_aligned=(prevlen+3u)&~(size_t)3u;
+ if(prev_aligned>len-base)return -13;
+ for(size_t i=base+prev_aligned;i<len;i++)if(input[i])return -13;
  unsigned char *raw=(unsigned char*)malloc(UNPACK_LEN);
  if(!raw)return -9;
  r=jdlz_unpack(input+base,len-base,raw,UNPACK_LEN);
