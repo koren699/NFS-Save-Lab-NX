@@ -41,11 +41,11 @@ CRC2 @ 0x14 = EA_CRC32(data[0x24:EOF])         # includes new MD5
 CRC3 @ 0x18 = EA_CRC32(data[0:0x18])           # includes new CRC2
 ```
 
-The MC02 cash candidate is much stronger now; **do not infer that an altered save is loadable** until tested on a disposable game profile.
+**2026-10-13: game-side success confirmed.** A separately produced MC02 copy with Cash **400000** and all 4 recomputed checksums was loaded successfully by the user in the Switch Xbox 360-port, and the game displayed **400000**. This validates a real edited save, not merely the hashes. In-app native Cash editing was then added in v0.5 with a strict file-length, signature, 4-hash and expected-cash gate. It uses the same algorithm, passes byte-identical synthetic cross-checks against the Python reference and preserves a verified .nfslab.bakN. **The first native v0.5 in-app edit itself still needs hardware testing.**
 
 ## Not established
 - Actual Xbox 360 file internals (record IDs, compression/encryption, money/bounty/heat mapping).
-- Confirmed successful game-side validation of newly recomputed checksums after any modified field; so far only existing hashes were verified on one untouched file.
+- In-app native v0.5 implementation successfully editing and loading its own Cash modifications (manual Python-equivalent test already succeeded in-game).
 - Whether Heat Level is stored directly in the same save, per car, or in a derived field.
 - Compatibility across MW, U2, and Carbon ports.
 
