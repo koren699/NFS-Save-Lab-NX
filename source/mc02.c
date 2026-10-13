@@ -113,6 +113,38 @@ int mc02_read_cash(const char *path,uint32_t *cash){
  if(!r)r=mc02_verify(buf,MC02_LEN,cash);
  free(buf);return r;
 }
+/*
+ * Bounty is a BE float in a stable, uniquely marked record. In two real
+ * profiles with values 31550 and 45150 the record moved from 0x010E
+ * to 0x015A, so we never use a hardcoded Bounty offset.
+ * This reader deliberately has NO write path.
+ */
+int mc02_read_bounty(const char *path,uint32_t *bounty,uint32_t *offset){
+ if(!bounty||!offset)return -3;
+ unsigned char *buf=(unsigned char*)malloc(MC02_LEN);
+ if(!buf)return -9;
+ int r=read_mc02(path,buf);
+ if(r){free(buf);return r;}
+ r=mc02_verify(buf,MC02_LEN,NULL);
+ if(r){free(buf);return r;}
+ static const unsigned char mark[12]={
+ 0x47,0x1c,0xb2,0x90,0x8b,0xe4,0xe2,0x55,0x47,0x33,0x00,0x31
+ };
+ int count=0;size_t hit=0;
+ for(size_t i=0x34;i+sizeof(mark)+4<=MC02_LEN-16;i++){
+  if(memcmp(buf+i,mark,sizeof(mark))==0){count++;hit=i+sizeof(mark);}
+ }
+ if(count!=1){free(buf);return -14;}
+ uint32_t bits=be32(buf+hit);
+ float val;
+ memcpy(&val,&bits,sizeof(val));
+ if(!(val>=0.0f&&val<=999999999.0f)){free(buf);return -15;}
+ uint32_t rounded=(uint32_t)(val+0.5f);
+ float error=val-(float)rounded;
+ if(error>0.001f||error< -0.001f){free(buf);return -15;}
+ *bounty=rounded;*offset=(uint32_t)hit;
+ free(buf);return 0;
+}
 static int available(const char *p){
  struct stat st;
  return stat(p,&st)!=0 && errno==ENOENT;
@@ -180,6 +212,8 @@ const char *mc02_error(int code){
   case -11:return "FAILED TO MAKE VERIFIED BACKUP";
   case -12:return "FILE VERIFICATION FAILED";
   case -13:return "RECOVER ORIGINAL FROM .oldpart OR .bak";
+  case -14:return "BOUNTY RECORD NOT UNIQUE";
+  case -15:return "BOUNTY VALUE UNRECOGNIZED";
   default:return "UNKNOWN ERROR";
  }
 }
