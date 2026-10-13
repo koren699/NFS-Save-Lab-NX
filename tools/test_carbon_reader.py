@@ -3,6 +3,7 @@
 No private player saves are copied into the public repository.
 """
 import struct
+import hmac
 import subprocess
 import tempfile
 from pathlib import Path
@@ -42,6 +43,12 @@ def profile(money):
     aligned=(len(compressed)+3)&~3
     struct.pack_into("<I",out,0x34bb0,aligned+0x18)
     struct.pack_into("<I",out,0x4c,aligned+0x4c)
+    # Game-tested Carbon Original Xbox save authentication:
+    # three SHA1 HMAC tags (each 20 bytes), all-zero 16-byte key.
+    struct.pack_into("<II",out,8,16,0x40000)
+    key=bytes(16)
+    for off,start,stop in ((0x10,0x4c,0x5c),(0x24,0x5c,TOTAL),(0x38,0,0x38)):
+        out[off:off+20]=hmac.digest(key,out[start:stop],"sha1")
     return bytes(out)
 
 with tempfile.TemporaryDirectory(prefix="carbon_synthetic_") as tmp:
