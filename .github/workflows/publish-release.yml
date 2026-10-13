@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/publish-release.yml'
+      - 'docs/RELEASE_NOTES_v0.16.md'
   workflow_dispatch:
     inputs:
       version:
