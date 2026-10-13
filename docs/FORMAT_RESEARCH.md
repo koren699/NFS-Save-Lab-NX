@@ -1,3 +1,14 @@
+## Successful live v0.9 Bounty editor test — sale + three purchases (2026-10-13)
+
+The user reports **successful in-game verification** after using the native NFS Save Lab NX v0.9 `EDIT BOUNTY` feature. Importantly, the test was **not** limited to the earlier one-car profile:
+
+1. Sold the old career car.
+2. Bought **three new cars**.
+3. Used the Switch homebrew UI to set total Bounty to **200,000**.
+4. The game loaded the edited save and displayed **200,000** Bounty.
+
+This is a direct success report for the native multi-car editor and its sold-car-history aggregation, selected-record update, and integrity-repair path **in this tested career scenario**. It gives stronger evidence than the earlier manually patched one-car test. It does not establish universal compatibility with every NFS Most Wanted save variant; retain format checks, fail-closed occupancy validation, verified backup, and recovery procedures.
+
 # NFS save-file format research / research log
 
 ## Confirmed
