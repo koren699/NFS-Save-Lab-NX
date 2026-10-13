@@ -1,0 +1,191 @@
+/*
+ * Research implementation of Original Xbox save authentication, for Carbon.
+ * Derivation and 3x20-byte layout based on the independently documented
+ * original-Xbox Most Wanted save signer (focanmess/NFSMW_Xbox_Save).
+ * NO edits to real Carbon saves are enabled here. Only an exact signature
+ * match on the user's genuine original profile will prove compatibility.
+ */
+#include "carbon_auth.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#define CARBON_FILE_SIZE 0x4005cu
+#define CARBON_TITLE_ID 0x4541009eu
+
+static uint32_t le32(const unsigned char *x){
+ return (uint32_t)x[0]|((uint32_t)x[1]<<8)|((uint32_t)x[2]<<16)|((uint32_t)x[3]<<24);
+}
+static uint32_t be32(const unsigned char *x){
+ return ((uint32_t)x[0]<<24)|((uint32_t)x[1]<<16)|((uint32_t)x[2]<<8)|x[3];
+}
+static void write_be32(unsigned char *out,uint32_t v){
+ out[0]=(unsigned char)(v>>24);out[1]=(unsigned char)(v>>16);
+ out[2]=(unsigned char)(v>>8);out[3]=(unsigned char)v;
+}
+static uint32_t rol(uint32_t x,unsigned bits){
+ return (x<<bits)|(x>>(32-bits));
+}
+typedef struct {
+ uint32_t h[5];
+ uint64_t bytes;
+ size_t used;
+ unsigned char buffer[64];
+} Sha1Ctx;
+static void sha_block(Sha1Ctx *c,const unsigned char *p){
+ uint32_t w[80];
+ for(unsigned i=0;i<16;i++)w[i]=be32(p+i*4);
+ for(unsigned i=16;i<80;i++)
+  w[i]=rol(w[i-3]^w[i-8]^w[i-14]^w[i-16],1);
+ uint32_t a=c->h[0],b=c->h[1],d=c->h[3],e=c->h[4],cc=c->h[2];
+ for(unsigned i=0;i<80;i++){
+  uint32_t f,k;
+  if(i<20){f=(b&cc)|((~b)&d);k=0x5a827999u;}
+  else if(i<40){f=b^cc^d;k=0x6ed9eba1u;}
+  else if(i<60){f=(b&cc)|(b&d)|(cc&d);k=0x8f1bbcdcu;}
+  else{f=b^cc^d;k=0xca62c1d6u;}
+  uint32_t t=rol(a,5)+f+e+k+w[i];
+  e=d;d=cc;cc=rol(b,30);b=a;a=t;
+ }
+ c->h[0]+=a;c->h[1]+=b;c->h[2]+=cc;c->h[3]+=d;c->h[4]+=e;
+}
+static void sha_init(Sha1Ctx *c){
+ memset(c,0,sizeof(*c));
+ c->h[0]=0x67452301u;c->h[1]=0xefcdab89u;c->h[2]=0x98badcfeu;
+ c->h[3]=0x10325476u;c->h[4]=0xc3d2e1f0u;
+}
+static void sha_update(Sha1Ctx *c,const unsigned char *data,size_t n){
+ if(!n)return;
+ c->bytes+=n;
+ while(n){
+  size_t take=64-c->used;
+  if(take>n)take=n;
+  memcpy(c->buffer+c->used,data,take);
+  c->used+=take;data+=take;n-=take;
+  if(c->used==64){sha_block(c,c->buffer);c->used=0;}
+ }
+}
+static void sha_final(Sha1Ctx *c,unsigned char digest[20]){
+ uint64_t bits=c->bytes*8u;
+ unsigned char pad[64]={0x80};
+ size_t fill=c->used<56?56-c->used:120-c->used;
+ sha_update(c,pad,fill);
+ unsigned char last[8];
+ for(unsigned i=0;i<8;i++)last[i]=(unsigned char)(bits>>(56-i*8));
+ sha_update(c,last,8);
+ for(unsigned i=0;i<5;i++)write_be32(digest+4*i,c->h[i]);
+ memset(c,0,sizeof(*c));
+}
+static void hmac_sha1(const unsigned char *key,size_t keylen,
+                      const unsigned char *data,size_t length,
+                      unsigned char digest[20]){
+ unsigned char blk[64]={0},ip[64],op[64],inner[20];
+ if(keylen>64){
+  Sha1Ctx c;sha_init(&c);sha_update(&c,key,keylen);sha_final(&c,inner);
+  memcpy(blk,inner,20);
+ }else memcpy(blk,key,keylen);
+ for(unsigned i=0;i<64;i++){ip[i]=blk[i]^0x36u;op[i]=blk[i]^0x5cu;}
+ Sha1Ctx s;sha_init(&s);sha_update(&s,ip,64);
+ sha_update(&s,data,length);sha_final(&s,inner);
+ sha_init(&s);sha_update(&s,op,64);sha_update(&s,inner,20);
+ sha_final(&s,digest);
+ memset(blk,0,sizeof(blk));memset(ip,0,sizeof(ip));
+ memset(op,0,sizeof(op));memset(inner,0,sizeof(inner));
+}
+static void make_key(const unsigned char title[16],unsigned char key[16]){
+ static const unsigned char retail[16]={
+ 0x5c,0x07,0x33,0xae,0x04,0x01,0xf7,0xe8,
+ 0xba,0x79,0x93,0xfd,0xcd,0x2f,0x1f,0xe0
+ };
+ unsigned char out[20];
+ hmac_sha1(retail,16,title,16,out);
+ memcpy(key,out,16);memset(out,0,sizeof(out));
+}
+static int valid(const unsigned char *p,size_t n){
+ return p&&n==CARBON_FILE_SIZE&&memcmp(p,"20CM",4)==0&&
+        le32(p+4)==CARBON_FILE_SIZE&&le32(p+8)==16u&&le32(p+12)==0x40000u;
+}
+static void make_tag(const unsigned char *save,unsigned which,
+                     const unsigned char key[16],unsigned char hash[20]){
+ if(which==0)hmac_sha1(key,16,save+0x4c,8,hash);
+ else if(which==1)hmac_sha1(key,16,save+0x54,CARBON_FILE_SIZE-0x54,hash);
+ else hmac_sha1(key,16,save,0x38,hash);
+}
+int carbon_auth_verify_buffer(const unsigned char *save,size_t n,
+                              const unsigned char title[16]){
+ if(!valid(save,n)||!title)return -1;
+ unsigned char key[16];make_key(title,key);
+ unsigned mismatch=0;
+ for(unsigned i=0;i<3;i++){
+  unsigned char hash[20];make_tag(save,i,key,hash);
+  const unsigned off=i==0?0x10:i==1?0x24:0x38;
+  unsigned diff=0;
+  for(unsigned j=0;j<20;j++)diff|=(unsigned)(hash[j]^save[off+j]);
+  mismatch|=(diff!=0);
+ }
+ memset(key,0,sizeof(key));
+ return mismatch?-3:0;
+}
+int carbon_auth_sign_buffer(unsigned char *save,size_t n,
+                            const unsigned char title[16]){
+ if(!valid(save,n)||!title)return -1;
+ unsigned char key[16];make_key(title,key);
+ for(unsigned i=0;i<3;i++){
+  unsigned char hash[20];make_tag(save,i,key,hash);
+  unsigned off=i==0?0x10:i==1?0x24:0x38;
+  memcpy(save+off,hash,20);
+ }
+ memset(key,0,sizeof(key));
+ return carbon_auth_verify_buffer(save,n,title);
+}
+/* XBE header: BaseAddress at 0x104, Certificate RVA at 0x118;
+ * certificate title ID at +0x08 and 16-byte signature key at +0xC0.
+ * Never print or upload the extracted key. */
+static int read_xbe_title_key(const char *path,unsigned char title[16]){
+ if(!path||!title)return -2;
+ FILE *f=fopen(path,"rb");if(!f)return -2;
+ unsigned char h[0x11c],cert[0xd0];
+ int r=-2;
+ do{
+  if(fread(h,1,sizeof(h),f)!=sizeof(h)||memcmp(h,"XBEH",4))break;
+  uint32_t base=le32(h+0x104),hlen=le32(h+0x108),rva=le32(h+0x118);
+  if(rva<base)break;
+  uint32_t where=rva-base;
+  if(where<0x100u||where+sizeof(cert)>hlen||where>0x200000u)break;
+  if(fseek(f,(long)where,SEEK_SET))break;
+  if(fread(cert,1,sizeof(cert),f)!=sizeof(cert))break;
+  if(le32(cert)<0xd0u||le32(cert+8)!=CARBON_TITLE_ID)break;
+  memcpy(title,cert+0xc0,16);
+  unsigned count=0;
+  for(unsigned i=0;i<16;i++)count|=title[i];
+  if(!count)break;
+  r=0;
+ }while(0);
+ fclose(f);return r;
+}
+int carbon_auth_verify_file(const char *save_path,const char *xbe_path){
+ unsigned char title[16];
+ int r=read_xbe_title_key(xbe_path,title);
+ if(r)return r;
+ unsigned char *save=(unsigned char*)malloc(CARBON_FILE_SIZE);
+ if(!save){memset(title,0,sizeof(title));return -4;}
+ FILE *f=save_path?fopen(save_path,"rb"):NULL;
+ if(!f){free(save);memset(title,0,sizeof(title));return -5;}
+ size_t n=fread(save,1,CARBON_FILE_SIZE,f);
+ int extra=fgetc(f),err=ferror(f),closed=fclose(f);
+ r=(n!=CARBON_FILE_SIZE||extra!=EOF||err||closed)?-1:
+   carbon_auth_verify_buffer(save,n,title);
+ memset(save,0,CARBON_FILE_SIZE);free(save);
+ memset(title,0,sizeof(title));
+ return r;
+}
+const char *carbon_auth_error(int r){
+ switch(r){
+ case 0:return "ALL 3 XBOX HMAC MATCH";
+ case -1:return "NOT ORIGINAL CARBON 20CM";
+ case -2:return "XBE / TITLE KEY NOT FOUND";
+ case -3:return "XBOX HMAC DOES NOT MATCH";
+ case -4:return "OUT OF MEMORY";
+ case -5:return "SAVE FILE READ FAILED";
+ default:return "SIGNATURE CHECK ERROR";
+ }
+}
