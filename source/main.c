@@ -258,37 +258,35 @@ static void info_panel(const char *heading,const char *subtitle){
  pill(862,451,game==0?"CASH MC02":"READ ONLY",accent);
  label(862,520,"VERIFIED HASH / BACKUP");
 }
-static void carbon_file_details(void){
- rect(840,182,375,420,COLOR(22,31,37));
- rect(840,182,6,420,accent);
- txt(863,207,2,"CARBON SAVE CHECK",WHITE);
- label(863,257,"PORT: ORIGINAL XBOX");
- if(nfiles<=0 || selected<0 || selected>=nfiles){
-  label(863,321,"NO SAVE FILE SELECTED");
+static void files_page(void){
+ if(game==2){
+  header("CARBON / CAREER PROFILES");
+  frame(64,182,1150,420,0);
+  txt(89,205,3,"SELECT A CAREER",WHITE);
+  label(89,253,"ONLY REAL ALIAS PROFILES ARE SHOWN");
+  if(!nfiles){
+   txt(89,341,2,"NO CARBON CAREER PROFILE FOUND",RED);
+   label(89,394,"CHECK THE GAME/UDATA SAVE FOLDER");
+  }
+  int liststart=selected-3;
+  if(liststart<0)liststart=0;
+  if(liststart>nfiles-MAX_ROWS)liststart=nfiles-MAX_ROWS;
+  if(liststart<0)liststart=0;
+  for(int i=liststart;i<nfiles&&i<liststart+MAX_ROWS;i++){
+   int y=294+(i-liststart)*40;
+   if(selected==i){
+    rect(89,y-6,1083,38,COLOR(42,62,67));
+    rect(89,y-6,5,38,accent);
+   }
+   char b[140];
+   snprintf(b,sizeof(b),"%02d  %.65s",i+1,files[i].name);
+   txt(106,y+3,2,b,selected==i?WHITE:MUTED);
+  }
+  footer("UP / DOWN  PROFILE       A  VIEW CASH       B  GAMES");
   return;
  }
- const SaveFile *f=&files[selected];
- label(863,312,"FILENAME");
- cliptext(863,345,2,f->name,WHITE,20);
- char b[76];
- snprintf(b,sizeof(b),"SIZE: %u BYTES",f->size);
- txt(863,388,2,b,accent);
- unsigned char lead[8]={0};
- size_t n=0;
- FILE *fp=fopen(f->path,"rb");
- if(fp){n=fread(lead,1,sizeof(lead),fp);fclose(fp);}
- label(863,433,"FIRST 8 BYTES / HEX");
- if(n==8){
-  snprintf(b,sizeof(b),"%02X %02X %02X %02X %02X %02X %02X %02X",
-   lead[0],lead[1],lead[2],lead[3],lead[4],lead[5],lead[6],lead[7]);
-  txt(863,462,2,b,WHITE);
- }else txt(863,462,2,"UNABLE TO READ HEADER",RED);
- label(863,535,"READ ONLY: SEND SAVE TO ANALYZE");
-}
-static void files_page(void){
  header("01 / LOCAL SAVE FILES");
  info_panel("SELECT A SAVE","UP / DOWN TO PICK A FILE.  A TO CONTINUE.");
- if(game==2)carbon_file_details();
  int start=selected-3;if(start<0)start=0;if(start>nfiles-MAX_ROWS)start=nfiles-MAX_ROWS;if(start<0)start=0;
  for(int z=0;z<MAX_ROWS;z++){
   int i=start+z;if(i>=nfiles)break;
