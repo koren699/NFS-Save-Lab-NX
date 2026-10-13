@@ -25,5 +25,11 @@ int carbon_auth_verify_switch_file(const char *save_path,unsigned *matched_tag_m
 int carbon_auth_verify_switch_buffer(const unsigned char *save,size_t size,
                                      unsigned *matched_tag_mask);
 int carbon_auth_sign_switch_buffer(unsigned char *save,size_t size);
+/* Shared Original Xbox 20CM authenticator. Signed ranges use LE32 at
+ * offsets 0x08 and 0x0C; tag offsets 0x10, 0x24, 0x38.
+ * Verified on Original Xbox Carbon and Underground 2 save examples.
+ * Caller MUST check exact platform-specific format and file length. */
+int xbox_20cm_verify_zero(const unsigned char *data,size_t len);
+int xbox_20cm_sign_zero(unsigned char *data,size_t len);
 const char *carbon_auth_error(int code);
 #endif
