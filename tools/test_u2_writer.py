@@ -23,7 +23,7 @@ def fixture(money):
     b[:4]=b"20CM"
     struct.pack_into("<III",b,4,SIZE,8,0xD218)
     struct.pack_into("<I",b,CASH_OFFSET,money)
-    b[0x300:0x308]=b"U2_SAMPLE"
+    b[0x300:0x308]=b"U2SAMPLE"
     return sign(b)
 
 with tempfile.TemporaryDirectory(prefix="nfslab_u2_") as td:
