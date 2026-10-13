@@ -621,7 +621,7 @@ static void carbon_cash_test_confirm_page(void){
                              carbon_cash_value,carbon_test_amount);
  txt(91,283,2,b,WHITE);
  txt(91,338,2,"ORIGINAL CAREER WILL NOT BE MODIFIED",accent);
- txt(91,380,2,"OUTPUT: ALIAS_*.nfslab.carbon.test",WHITE);
+ txt(91,380,2,"OUTPUT: NFSLAB_TEST_ALIAS_*",WHITE);
  label(91,433,"THE GAME MAY REJECT THIS TEST FILE");
  label(91,473,"MANUAL DBI REPLACEMENT NEEDED FOR GAME TEST");
  label(91,525,"HOLD ZL + ZR AND PRESS A TO CREATE");
@@ -637,7 +637,7 @@ static void carbon_cash_test_result_page(void){
  }else{
   char b[64];snprintf(b,sizeof(b),"TEST CASH: $%u",carbon_test_amount);
   txt(91,317,3,b,accent);
-  txt(91,401,2,"FILE: ALIAS_*.nfslab.carbon.test",WHITE);
+  txt(91,401,2,"FILE: NFSLAB_TEST_ALIAS_*",WHITE);
   label(91,456,"USE DBI TO COPY AND RENAME TEST FOR A GAME LOAD");
   label(91,506,"MAKE A SEPARATE BACKUP OF ORIGINAL FIRST");
  }
