@@ -39,7 +39,7 @@ int lab_diff_values(const char *before_path,const char *after_path,
             out->changed_bytes++;
             if(!inside){
                 out->changed_ranges++;
-                if(!out->first_difference)out->first_difference=(uint32_t)i;
+                if(out->changed_ranges==1)out->first_difference=(uint32_t)i;
             }
             out->last_difference=(uint32_t)i;
             inside=1;
