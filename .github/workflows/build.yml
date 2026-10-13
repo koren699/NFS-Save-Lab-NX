@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Test file-edit engine on host
+      - name: Test scan, backup and diagnostics safety on host
         run: bash tests/run.sh
 
       - name: Compile Switch homebrew
