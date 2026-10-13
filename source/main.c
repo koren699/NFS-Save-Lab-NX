@@ -11,6 +11,7 @@
 #include "diagnostics.h"
 #include "mc02.h"
 #include "carbon.h"
+#include "carbon_auth.h"
 #include "poster_embedded.h"
 #include "font8x8_basic.h"
 
@@ -59,6 +60,7 @@ static unsigned bounty_selected=0;
 static int bounty_write_error=0;
 static int carbon_cash_error=0;
 static uint32_t carbon_cash_value=0;
+static int carbon_hmac_status=-2;
 static uint32_t carbon_test_amount=0;
 static int carbon_test_error=0;
 static char carbon_test_path[1024]={0};
@@ -200,7 +202,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.13.1",WHITE);
+ txt(980,42,2,"BUILD 0.14.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -219,7 +221,7 @@ static void big_number(int x,int y,const char *s){
 }
 static void footer(const char *shortline){
  label(67,648,shortline);
- label(67,685,game==2?"CARBON: EXPERIMENTAL CASH TEST COPY / LIVE SAVE SAFE":
+ label(67,685,game==2?"CARBON: HMAC SIGNATURE DIAGNOSTICS / READ ONLY":
       "MOST WANTED: CASH + BOUNTY MC02    /    HEAT: READ ONLY");
 }
 static void game_card(int idx,int x,int y){
@@ -580,28 +582,32 @@ static void bounty_result_page(void){
  footer("B  BACK TO TOOL MENU");
 }
 static void carbon_cash_info_page(void){
- header("CARBON / CAREER");
+ header("CARBON / AUTHENTICATION");
  frame(64,182,1150,420,0);
- txt(94,211,3,"YOUR CAREER",WHITE);
- label(95,269,"NEED FOR SPEED CARBON / ORIGINAL XBOX");
+ txt(94,211,3,"YOUR CARBON CAREER",WHITE);
+ label(95,269,"ORIGINAL XBOX 20CM / JDLZ");
  rect(95,307,684,4,accent);
  if(carbon_cash_error){
-  txt(94,349,2,carbon_error(carbon_cash_error),RED);
-  label(95,408,"CAN'T READ THIS PROFILE / NO CHANGES MADE");
+  txt(94,346,2,carbon_error(carbon_cash_error),RED);
+  label(95,400,"SAVE NOT MODIFIED");
  }else{
   txt(95,346,2,"CURRENT CASH",MUTED);
-  char number[48];snprintf(number,sizeof(number),"$%u",carbon_cash_value);
-  big_number(95,387,number);
+  char money[45];snprintf(money,sizeof(money),"$%u",carbon_cash_value);
+  big_number(95,392,money);
  }
+ txt(95,512,2,"NO FILES ARE CHANGED BY THIS CHECK",MUTED);
  rect(813,209,374,360,COLOR(22,31,37));
  rect(813,209,6,360,accent);
- txt(836,236,2,"PROFILE",MUTED);
+ txt(836,232,2,"PROFILE",MUTED);
  if(nfiles && selected>=0 && selected<nfiles)
-  cliptext(836,280,2,files[selected].name,WHITE,20);
- txt(836,358,2,"EDITOR STATUS",MUTED);
- pill(836,396,"TEST COPY",accent);
- label(836,474,"ORIGINAL STAYS UNCHANGED");
- footer(carbon_cash_error?"B  BACK":"A  TEST CASH CHANGE       B  BACK");
+  cliptext(836,268,2,files[selected].name,WHITE,20);
+ txt(836,328,2,"XBOX SIGNATURE",MUTED);
+ txt(836,371,2,carbon_hmac_status==0?"HMAC 1 / 2 / 3: MATCH":
+        "NOT VERIFIED",carbon_hmac_status==0?accent:RED);
+ label(836,433,carbon_auth_error(carbon_hmac_status));
+ label(836,497,"SOURCE: GAME/DEFAULT.XBE");
+ footer(nfiles==1?"B  BACK TO GAMES   /   SIGNATURE DIAGNOSTICS":
+       "B  BACK TO CAREERS   /   SIGNATURE DIAGNOSTICS");
 }
 static void carbon_cash_edit_page(void){
  header("CARBON / EXPERIMENTAL CASH");
@@ -748,6 +754,8 @@ static void handle(u64 key,u64 held){
    discover();
    if(game==2 && nfiles==1){
     carbon_cash_error=carbon_read_cash(files[0].path,&carbon_cash_value);
+    carbon_hmac_status=carbon_auth_verify_file(files[0].path,
+        "sdmc:/switch/nfscx/game/default.xbe");
     status_line[0]=0;screen=22;
    }else{
     if(game==2 && nfiles>0)status_line[0]=0;
@@ -761,6 +769,8 @@ static void handle(u64 key,u64 held){
   else if(key&HidNpadButton_A&&nfiles){
    if(game==2){
     carbon_cash_error=carbon_read_cash(files[selected].path,&carbon_cash_value);
+    carbon_hmac_status=carbon_auth_verify_file(files[selected].path,
+        "sdmc:/switch/nfscx/game/default.xbe");
     status_line[0]=0;screen=22;
    }else{
     old_val=0;new_val=0;digit=4;action=0;screen=7;
@@ -919,10 +929,8 @@ static void handle(u64 key,u64 held){
  }else if(screen==21&&key&HidNpadButton_B)screen=7;
  else if(screen==22){
   if(key&HidNpadButton_B){screen=nfiles==1?0:1;status_line[0]=0;}
-  else if((key&HidNpadButton_A)&&!carbon_cash_error){
-   carbon_test_amount=carbon_cash_value;
-   digit=4;screen=23;status_line[0]=0;
-  }
+  /* Write disabled while original-Xbox signing is not confirmed. */
+  
  }else if(screen==23){
   if(key&HidNpadButton_B)screen=22;
   else if(key&HidNpadButton_A){
