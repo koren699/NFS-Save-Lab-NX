@@ -16,6 +16,9 @@ cc -std=c11 -Wall -Wextra -Werror -O2 -Isource source/carbon_auth.c tests/test_c
 ./tests/test_carbon_auth
 rm -f tests/test_carbon_auth
 python3 tools/test_carbon_reader.py
+cc -std=c11 -Wall -Wextra -Werror -O2 -Isource source/u2.c source/carbon_auth.c source/backup.c tests/test_u2.c -o tests/test_u2
+python3 tools/test_u2_writer.py
+rm -f tests/test_u2
 rm -f tests/test_carbon_edit
 rm -f tests/test_carbon
 rm -f tests/test_engine tests/test_backup tests/test_diagnostics tests/test_mc02 tests/test_bounty
