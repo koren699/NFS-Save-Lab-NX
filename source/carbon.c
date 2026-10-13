@@ -41,7 +41,7 @@ static int jdlz_unpack(const unsigned char *data,size_t stored,
    }
    in+=2;
    if(!back||back>at||len>outlen-at)return -7;
-   for(unsigned i=0;i<len;i++)out[at++]=out[at-back];
+   for(unsigned i=0;i<len;i++){out[at]=out[at-back];at++;}
    f2>>=1;
   }else{
    if(in>=used)return -7;
