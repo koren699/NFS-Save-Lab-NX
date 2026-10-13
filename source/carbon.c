@@ -1,7 +1,11 @@
 #include "carbon.h"
+#include "carbon_auth.h"
+#include "carbon_jdlz.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <sys/stat.h>
 
 static uint32_t le32(const unsigned char *p){
  return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
@@ -149,6 +153,7 @@ static int make_cash_candidate(const unsigned char *input,size_t len,
                                unsigned char *candidate){
  if(!input||!candidate||input==candidate)return -3;
  if(new_cash>999999999u)return -10;
+ if(carbon_auth_verify_zero_buffer(input,len))return -20;
  uint32_t check=0;
  int r=carbon_parse_cash(input,len,&check);
  if(r)return r;
@@ -190,32 +195,31 @@ static int make_cash_candidate(const unsigned char *input,size_t len,
   memset(raw+UNPACK_LEN-(old_digits-n),0,old_digits-n);
  }
  memcpy(raw+start,number,n);
- /* A literal-only stream requires 16 + 4096 flag bytes + 1
-  * secondary control byte + 32768 literal bytes = 36881 bytes.
-  * The JDLZ reader obtains a new f1 byte every 8 literal tokens,
-  * while f2 is read once and remains unused. */
- const size_t packed_size=16u+1u+4096u+UNPACK_LEN;
- if(packed_size>len-base){free(raw);return -14;}
+ /* Game-tested compact JDLZ instead of oversized literal-only output.
+  * Three HMAC tags MUST be re-signed after any re-packed bytes change. */
+ size_t compressed_len=0;
+ unsigned char *packed=(unsigned char*)malloc(len-base);
+ if(!packed){free(raw);return -9;}
+ r=carbon_jdlz_compress(raw,UNPACK_LEN,packed,len-base,&compressed_len);
+ free(raw);
+ if(r||compressed_len<16||compressed_len>len-base){
+  free(packed);return -14;
+ }
  memcpy(candidate,input,len);
  memset(candidate+base,0,len-base);
- unsigned char *dst=candidate+base;
- memcpy(dst,"JDLZ",4);dst[4]=2;dst[5]=16;
- put_le32(dst+8,UNPACK_LEN);put_le32(dst+12,(uint32_t)packed_size);
- size_t op=16;
- for(size_t i=0;i<UNPACK_LEN;i++){
-  if(i%8u==0){dst[op++]=0;if(i==0)dst[op++]=0;}
-  dst[op++]=raw[i];
- }
- free(raw);
- if(op!=packed_size)return -14;
- uint32_t newalign=((uint32_t)packed_size+3u)&~3u;
+ memcpy(candidate+base,packed,compressed_len);
+ free(packed);
+ uint32_t newalign=((uint32_t)compressed_len+3u)&~3u;
  put_le32(candidate+frame+8,newalign+0x18u);
  put_le32(candidate+0x4c,newalign+0x4cu);
+ /* Existing Game MD5 at 0x6C covers the separate unchanged Game section.
+  * Verify the 3 game-tested 20-byte zero-key HMAC-SHA1 signatures. */
+ r=carbon_auth_sign_zero_buffer(candidate,len);
+ if(r)return -21;
  uint32_t verify=0;
  r=carbon_parse_cash(candidate,len,&verify);
  if(r||verify!=new_cash)return -15;
- /* The PC/Xbox wrapper authentication is unknown: do not recalculate
-  * or forge unknown header bytes. The file is TEST ONLY. */
+ if(carbon_auth_verify_zero_buffer(candidate,len))return -21;
  return 0;
 }
 int carbon_create_cash_test(const char *path,uint32_t expected_cash,uint32_t new_cash,
@@ -261,6 +265,93 @@ int carbon_create_cash_test(const char *path,uint32_t expected_cash,uint32_t new
  return r;
 }
 
+/* Reliable backup+promote for genuine signed Carbon profiles only.
+ * A bad hash, unsupported source layout, stale input or conflicting temp file
+ * is an immediate rejection without touching the active save.
+ */
+static int carbon_read_exact(const char *path,unsigned char *buf){
+ FILE *f=path?fopen(path,"rb"):NULL;
+ if(!f)return -4;
+ size_t n=fread(buf,1,CARBON_ORIGINAL_XBOX_FILE_LEN,f);
+ int last=fgetc(f),err=ferror(f),closed=fclose(f);
+ if(n!=CARBON_ORIGINAL_XBOX_FILE_LEN||last!=EOF||err||closed)return -1;
+ return carbon_auth_verify_zero_buffer(buf,CARBON_ORIGINAL_XBOX_FILE_LEN)?-20:0;
+}
+static int carbon_file_absent(const char *name){
+ struct stat st;return stat(name,&st)!=0&&errno==ENOENT;
+}
+static int carbon_write_exclusive(const char *path,const unsigned char *buf){
+ FILE *f=fopen(path,"wbx");
+ if(!f)return -18;
+ int ok=fwrite(buf,1,CARBON_ORIGINAL_XBOX_FILE_LEN,f)==CARBON_ORIGINAL_XBOX_FILE_LEN;
+ if(fflush(f))ok=0;
+ if(fclose(f))ok=0;
+ if(!ok){remove(path);return -18;}
+ return 0;
+}
+int carbon_apply_cash(const char *path,uint32_t old_cash,uint32_t new_cash,
+                      char *backup_path,size_t cap){
+ if(!path||!backup_path||cap<128||strlen(path)>730 ||
+    strstr(path,".nfslab.")||strstr(path,"NFSLAB_TEST_"))return -3;
+ backup_path[0]=0;
+ unsigned char *old=(unsigned char*)malloc(CARBON_ORIGINAL_XBOX_FILE_LEN);
+ unsigned char *made=(unsigned char*)malloc(CARBON_ORIGINAL_XBOX_FILE_LEN);
+ unsigned char *verify=(unsigned char*)malloc(CARBON_ORIGINAL_XBOX_FILE_LEN);
+ if(!old||!made||!verify){
+  free(old);free(made);free(verify);return -9;
+ }
+ int r=carbon_read_exact(path,old);
+ if(r)goto done;
+ r=make_cash_candidate(old,CARBON_ORIGINAL_XBOX_FILE_LEN,old_cash,new_cash,made);
+ if(r)goto done;
+ char temp[1024],part[1024],bk[1024];
+ if(snprintf(temp,sizeof(temp),"%s.nfslab.carbon.tmp",path)<0 ||
+    snprintf(part,sizeof(part),"%s.nfslab.carbon.oldpart",path)<0){
+  r=-3;goto done;
+ }
+ if(!carbon_file_absent(temp)||!carbon_file_absent(part)){r=-22;goto done;}
+ int found=0;
+ for(int i=1;i<100;i++){
+  int n=snprintf(bk,sizeof(bk),"%s.nfslab.bak%d",path,i);
+  if(n<0||(size_t)n>=sizeof(bk)){r=-3;goto done;}
+  if(carbon_file_absent(bk)){found=1;break;}
+ }
+ if(!found){r=-23;goto done;}
+ /* Save original bytes and verify exact backup before any rename. */
+ r=carbon_write_exclusive(bk,old);
+ if(r)goto done;
+ r=carbon_read_exact(bk,verify);
+ if(r||memcmp(verify,old,CARBON_ORIGINAL_XBOX_FILE_LEN)){
+  r=-23;goto done;
+ }
+ snprintf(backup_path,cap,"%s",bk);
+ r=carbon_read_exact(path,verify);
+ if(r||memcmp(verify,old,CARBON_ORIGINAL_XBOX_FILE_LEN)){
+  r=-24;goto done;
+ }
+ r=carbon_write_exclusive(temp,made);
+ if(r)goto done;
+ r=carbon_read_exact(temp,verify);
+ if(r||memcmp(verify,made,CARBON_ORIGINAL_XBOX_FILE_LEN)){
+  remove(temp);r=-24;goto done;
+ }
+ if(rename(path,part)!=0){remove(temp);r=-18;goto done;}
+ if(rename(temp,path)!=0){
+  if(rename(part,path)!=0){r=-25;goto done;}
+  remove(temp);r=-18;goto done;
+ }
+ r=carbon_read_exact(path,verify);
+ if(r||memcmp(verify,made,CARBON_ORIGINAL_XBOX_FILE_LEN)){
+  char failed[1024];snprintf(failed,sizeof(failed),"%s.nfslab.carbon.failed",path);
+  if(carbon_file_absent(failed))rename(path,failed);
+  if(rename(part,path)!=0){r=-25;goto done;}
+  r=-24;goto done;
+ }
+ remove(part);r=0;
+done:
+ free(old);free(made);free(verify);return r;
+}
+
 const char *carbon_error(int code){
  switch(code){
   case 0:return "OK";
@@ -278,7 +369,13 @@ const char *carbon_error(int code){
   case -14:return "CANNOT REPACK JDLZ SAFELY";
   case -15:return "TEST COPY FAILED VALIDATION";
   case -17:return "TEST COPY ALREADY EXISTS";
-  case -18:return "ERROR WRITING TEST COPY";
+  case -18:return "SD FILE WRITE FAILED";
+  case -20:return "SOURCE HMAC SIGNATURE INVALID";
+  case -21:return "OUTPUT HMAC SIGNATURE INVALID";
+  case -22:return "TEMP / RECOVERY FILE EXISTS";
+  case -23:return "BACKUP CREATION FAILED";
+  case -24:return "SAVE VERIFICATION FAILED";
+  case -25:return "RESTORE ORIGINAL FROM .oldpart OR .bak";
   default:return "UNKNOWN CARBON ERROR";
  }
 }
