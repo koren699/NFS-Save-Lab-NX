@@ -41,6 +41,14 @@ except ValueError:pass
 try:build_test_copy(original,900,900);assert False,"no-op gate failed"
 except ValueError:pass
 with tempfile.TemporaryDirectory(prefix="mc02lab_") as d:
+    # Byte-exact cross-language regression: verify native C follows Python ref.
+    # A synthetic valid MC02 is generated, no private user save is used.
+    compare_source=Path(d)/"synthetic_before.bin"
+    compare_expected=Path(d)/"synthetic_400k.bin"
+    compare_source.write_bytes(original)
+    compare_expected.write_bytes(build_test_copy(original,900,400000))
+    subprocess.run(["./tests/test_mc02",str(compare_source),str(compare_expected)],
+                   check=True)
     source=Path(d)/"original.bin"
     target=Path(d)/"separate-test-copy.bin"
     source.write_bytes(original)
