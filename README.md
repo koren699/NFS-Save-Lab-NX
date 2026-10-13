@@ -8,7 +8,7 @@
 
 [🇺🇦 Українська](README_UA.md) · [🇬🇧 English](README.md) · [🇷🇺 Русский](README_RU.md)
 
-## Screenshots
+
 
 ![NFS Save Lab NX v0.16 home screen with Most Wanted, Underground 2 and Carbon pixel-art covers](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/01-main-menu.jpg)
 
