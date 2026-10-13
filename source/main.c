@@ -12,6 +12,7 @@
 #include "mc02.h"
 #include "carbon.h"
 #include "carbon_auth.h"
+#include "u2.h"
 #include "poster_embedded.h"
 #include "font8x8_basic.h"
 
@@ -64,6 +65,8 @@ static int carbon_hmac_status=-2;
 static uint32_t carbon_test_amount=0;
 static int carbon_test_error=0;
 static char carbon_test_path[1024]={0};
+static uint32_t u2_cash_value=0,u2_new_cash=0;
+static int u2_cash_error=0,u2_write_error=0;
 static char status_line[190]="READY TO SCAN LOCAL SAVES";
 static Framebuffer fb;
 static uint32_t *pixels;
@@ -202,7 +205,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.15.0",WHITE);
+ txt(980,42,2,"BUILD 0.16.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -221,7 +224,8 @@ static void big_number(int x,int y,const char *s){
 }
 static void footer(const char *shortline){
  label(67,648,shortline);
- label(67,685,game==2?"CARBON: CASH EDIT / VERIFIED 3X HMAC / BACKUP":
+ label(67,685,game==1?"UNDERGROUND 2: CASH EDIT / VERIFIED 3X HMAC / BACKUP":
+      game==2?"CARBON: CASH EDIT / VERIFIED 3X HMAC / BACKUP":
       "MOST WANTED: CASH + BOUNTY MC02    /    HEAT: READ ONLY");
 }
 static void game_card(int idx,int x,int y){
@@ -266,13 +270,13 @@ static void info_panel(const char *heading,const char *subtitle){
  label(862,520,game==2?"GAME SIGNATURE UNVERIFIED":"VERIFIED HASH / BACKUP");
 }
 static void files_page(void){
- if(game==2){
-  header("CARBON / CAREER PROFILES");
+ if(game==1||game==2){
+  header(game==1?"UNDERGROUND 2 / CAREERS":"CARBON / CAREER PROFILES");
   frame(64,182,1150,420,0);
   txt(89,205,3,"SELECT A CAREER",WHITE);
-  label(89,253,"ONLY REAL ALIAS PROFILES ARE SHOWN");
+  label(89,253,game==1?"ONLY VALID XBOX CAREER FILES":"ONLY REAL ALIAS PROFILES ARE SHOWN");
   if(!nfiles){
-   txt(89,341,2,"NO CARBON CAREER PROFILE FOUND",RED);
+   txt(89,341,2,game==1?"NO UNDERGROUND 2 PROFILE FOUND":"NO CARBON CAREER PROFILE FOUND",RED);
    label(89,394,"CHECK THE GAME/UDATA SAVE FOLDER");
   }
   int liststart=selected-3;
@@ -289,7 +293,7 @@ static void files_page(void){
    snprintf(b,sizeof(b),"%02d  %.65s",i+1,files[i].name);
    txt(106,y+3,2,b,selected==i?WHITE:MUTED);
   }
-  footer("UP / DOWN  PROFILE       A  VIEW CASH       B  GAMES");
+  footer("UP / DOWN  PROFILE       A  OPEN CASH       B  GAMES");
   return;
  }
  header("01 / LOCAL SAVE FILES");
@@ -651,6 +655,76 @@ static void carbon_cash_test_result_page(void){
  }
  footer("B  BACK TO CARBON CAREER");
 }
+static void u2_cash_info_page(void){
+ header("UNDERGROUND 2 / CAREER");
+ frame(64,182,1150,420,0);
+ txt(94,211,3,"YOUR UNDERGROUND 2 CAREER",WHITE);
+ label(95,269,"ORIGINAL XBOX 20CM / VERIFIED IN GAME");
+ rect(95,307,684,4,accent);
+ if(u2_cash_error){
+  txt(94,345,2,u2_error(u2_cash_error),RED);
+ }else{
+  txt(95,346,2,"CURRENT CASH",MUTED);
+  char b[48];snprintf(b,sizeof(b),"$%u",u2_cash_value);
+  big_number(95,392,b);
+ }
+ txt(95,512,2,u2_cash_error?"SAVE EDITING IS LOCKED":
+     "PRESS A TO CHANGE CASH",u2_cash_error?RED:accent);
+ rect(813,209,374,360,COLOR(22,31,37));
+ rect(813,209,6,360,accent);
+ txt(836,235,2,"PROFILE",MUTED);
+ if(nfiles && selected>=0 && selected<nfiles)
+  cliptext(836,273,2,files[selected].name,WHITE,20);
+ txt(836,331,2,"XBOX SIGNATURE",MUTED);
+ txt(836,375,2,u2_cash_error?"NOT VERIFIED":
+                           "HMAC 1 / 2 / 3: MATCH",u2_cash_error?RED:accent);
+ label(836,437,"CASH: 32-BIT LITTLE ENDIAN");
+ label(836,498,"VERIFIED BACKUP ON EVERY WRITE");
+ footer(u2_cash_error?"B  BACK":
+             "A  EDIT CASH       B  GAMES");
+}
+static void u2_cash_edit_page(void){
+ header("UNDERGROUND 2 / EDIT CASH");
+ info_panel("SET CASH","ORIGINAL XBOX / VERIFIED 20CM");
+ char b[85];snprintf(b,sizeof(b),"CURRENT: $%u",u2_cash_value);
+ txt(91,285,2,b,WHITE);
+ txt(91,340,2,"NEW CASH:",accent);
+ snprintf(b,sizeof(b),"%09u",u2_new_cash);
+ big_number(91,375,b);
+ rect(91+(8-digit)*40,432,37,5,accent);
+ label(91,473,"UP / DOWN  CHANGE VALUE");
+ label(91,514,"LEFT / RIGHT  SELECT DIGIT");
+ footer("A  REVIEW EDIT       B  CANCEL");
+}
+static void u2_cash_confirm_page(void){
+ header("UNDERGROUND 2 / CONFIRM CASH");
+ info_panel("SECURE CAREER UPDATE","EXACT 20CM SIZE / ALL THREE HMACS");
+ char b[100];snprintf(b,sizeof(b),"CASH: $%u -> $%u",
+                             u2_cash_value,u2_new_cash);
+ txt(91,283,2,b,WHITE);
+ txt(91,339,2,"1  VERIFIED ORIGINAL BACKUP",accent);
+ txt(91,382,2,"2  EDIT ONLY CASH + SIGNATURES",accent);
+ label(91,433,"3  CHECK SD WRITE / RESTORE IF NEEDED");
+ label(91,471,"MAKE INDEPENDENT BACKUP FOR FIRST TEST");
+ label(91,520,"HOLD ZL + ZR AND PRESS A");
+ footer("ZL + ZR + A  WRITE       B  CANCEL");
+}
+static void u2_cash_result_page(void){
+ header("UNDERGROUND 2 / EDIT RESULT");
+ info_panel(u2_write_error?"SAVE NOT UPDATED":"CASH UPDATED",
+            "ORIGINAL XBOX / SIGNED CAREER");
+ if(u2_write_error){
+  txt(91,323,2,u2_error(u2_write_error),RED);
+  label(91,397,"KEEP OR RESTORE YOUR ORIGINAL BACKUP");
+ }else{
+  char b[80];snprintf(b,sizeof(b),"NEW CASH: $%u",u2_new_cash);
+  txt(91,320,3,b,accent);
+  txt(91,399,2,"VERIFIED ORIGINAL: .nfslab.bakN",WHITE);
+  label(91,458,"ALL THREE HMAC SIGNATURES MATCH");
+  label(91,500,"CHECK THE VALUE IN THE GAME");
+ }
+ footer("B  BACK TO UNDERGROUND 2 CAREER");
+}
 static void draw(void){
  uint32_t stride;
  pixels=(uint32_t*)framebufferBegin(&fb,&stride);
@@ -674,7 +748,11 @@ static void draw(void){
  case 22:carbon_cash_info_page();break;
  case 23:carbon_cash_edit_page();break;
  case 24:carbon_cash_test_confirm_page();break;
- case 25:carbon_cash_test_result_page();break;}
+ case 25:carbon_cash_test_result_page();break;
+ case 26:u2_cash_info_page();break;
+ case 27:u2_cash_edit_page();break;
+ case 28:u2_cash_confirm_page();break;
+ case 29:u2_cash_result_page();break;}
  if(status_line[0]){
   rect(64,605,1150,23,COLOR(36,45,50));
   cliptext(73,609,2,status_line,WHITE,68);
@@ -701,6 +779,18 @@ static int carbon_is_career(const char *path,const char *name,off_t length){
  return ok && memcmp(head,"20CM",4)==0 &&
         get_le32(head+4)==(uint32_t)length;
 }
+/* Original Xbox Underground 2 uses an uncompressed 53,868-byte 20CM
+ * career profile. Never show Xbox icon or SaveMeta files in selection. */
+static int u2_is_career(const char *path,off_t length){
+ if(length!=(off_t)U2_SAVE_LEN)return 0;
+ FILE *f=fopen(path,"rb");if(!f)return 0;
+ unsigned char h[16];
+ int ok=fread(h,1,sizeof(h),f)==sizeof(h);
+ if(fclose(f)!=0)ok=0;
+ return ok && memcmp(h,"20CM",4)==0 &&
+       get_le32(h+4)==U2_SAVE_LEN && get_le32(h+8)==8u &&
+       get_le32(h+12)==0xD218u;
+}
 static void crawl(const char *root,int depth,int backup){
  if(depth>7||nfiles>=MAX_FILES)return;
  DIR *d=opendir(root);if(!d)return;
@@ -715,6 +805,7 @@ static void crawl(const char *root,int depth,int backup){
    crawl(p,depth+1,backup);continue;}
   if(!S_ISREG(st.st_mode)||st.st_size<32||st.st_size>(off_t)LAB_MAX_FILE||!suitable(ent->d_name))continue;
    if(game==2&&!carbon_is_career(p,ent->d_name,st.st_size))continue;
+   if(game==1&&!u2_is_career(p,st.st_size))continue;
   SaveFile *f=&files[nfiles++];
   snprintf(f->path,sizeof(f->path),"%s",p);snprintf(f->name,sizeof(f->name),"%s",ent->d_name);
   f->size=(uint32_t)st.st_size;f->backup=backup;
@@ -724,7 +815,10 @@ static void crawl(const char *root,int depth,int backup){
 static void discover(void){
  nfiles=0;selected=0;
  for(int r=0;game_root[game][r];r++)if(is_dir(game_root[game][r]))crawl(game_root[game][r],0,game==0&&r>=2);
- if(game==2)
+ if(game==1)
+  snprintf(status_line,sizeof(status_line),nfiles?
+      "%d UNDERGROUND 2 CAREER(S) FOUND":"NO UNDERGROUND 2 CAREER FOUND",nfiles);
+ else if(game==2)
   snprintf(status_line,sizeof(status_line),nfiles?
       "%d CARBON CAREER PROFILE(S) FOUND":"NO CARBON CAREER PROFILES FOUND",nfiles);
  else
@@ -752,12 +846,15 @@ static void handle(u64 key,u64 held){
   if(key&HidNpadButton_R){game=(game+1)%3;status_line[0]=0;}
   if(key&HidNpadButton_A){
    discover();
-   if(game==2 && nfiles==1){
+   if(game==1 && nfiles==1){
+    u2_cash_error=u2_read_cash(files[0].path,&u2_cash_value);
+    status_line[0]=0;screen=26;
+   }else if(game==2 && nfiles==1){
     carbon_cash_error=carbon_read_cash(files[0].path,&carbon_cash_value);
     carbon_hmac_status=carbon_auth_verify_zero_file(files[0].path);
     status_line[0]=0;screen=22;
    }else{
-    if(game==2 && nfiles>0)status_line[0]=0;
+    if(game!=0 && nfiles>0)status_line[0]=0;
     screen=1;
    }
   }
@@ -766,7 +863,10 @@ static void handle(u64 key,u64 held){
   else if(key&HidNpadButton_Up&&selected>0)selected--;
   else if(key&HidNpadButton_Down&&selected<nfiles-1)selected++;
   else if(key&HidNpadButton_A&&nfiles){
-   if(game==2){
+   if(game==1){
+    u2_cash_error=u2_read_cash(files[selected].path,&u2_cash_value);
+    status_line[0]=0;screen=26;
+   }else if(game==2){
     carbon_cash_error=carbon_read_cash(files[selected].path,&carbon_cash_value);
     carbon_hmac_status=carbon_auth_verify_zero_file(files[selected].path);
     status_line[0]=0;screen=22;
@@ -956,6 +1056,35 @@ static void handle(u64 key,u64 held){
    }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR AND PRESS A");
   }
  }else if(screen==25&&key&HidNpadButton_B){screen=22;status_line[0]=0;}
+ else if(screen==26){
+  if(key&HidNpadButton_B){screen=nfiles==1?0:1;status_line[0]=0;}
+  else if(key&HidNpadButton_A && !u2_cash_error){
+   u2_new_cash=u2_cash_value;digit=4;screen=27;status_line[0]=0;
+  }
+ }else if(screen==27){
+  if(key&HidNpadButton_B)screen=26;
+  else if(key&HidNpadButton_A){
+   if(u2_new_cash==u2_cash_value)
+    snprintf(status_line,sizeof(status_line),"NEW CASH MUST DIFFER FROM CURRENT VALUE");
+   else{screen=28;status_line[0]=0;}
+  }else{
+   int prev=metric;metric=0;
+   change_number(key,&u2_new_cash);metric=prev;
+  }
+ }else if(screen==28){
+  if(key&HidNpadButton_B)screen=27;
+  else if(key&HidNpadButton_A){
+   if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
+    u2_write_error=u2_apply_cash(files[selected].path,u2_cash_value,
+                                   u2_new_cash,backup_path,sizeof(backup_path));
+    if(!u2_write_error){
+     u2_cash_value=u2_new_cash;
+     u2_cash_error=u2_verify_file(files[selected].path);
+    }
+    screen=29;status_line[0]=0;
+   }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR THEN PRESS A");
+  }
+ }else if(screen==29 && key&HidNpadButton_B){screen=26;status_line[0]=0;}
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
