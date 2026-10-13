@@ -1,5 +1,21 @@
 # NFS Carbon (original Xbox -> Nintendo Switch, nfsc-sw) save research
 
+## Failed in-game test of v0.13.1 and alternative compact JDLZ diagnostics (2026-10-13)
+
+The user attempted to load the v0.13.1 experimental test copy. **Carbon reported the save was corrupted and refused to load it.** This is a concrete failed in-game test; v0.13.1's ability to read its own output is NOT proof of a game-compatible save. The live original was not modified by the homebrew test-copy operation. Keep all direct Carbon writes disabled; do not promote the test-copy writer to a stable editor.
+
+New investigation found that v0.13.1 used a **literal-only JDLZ stream** (around 36,881 bytes) to encode the original **32,768-byte** uncompressed career table. By contrast, the game's original JDLZ stream was **3,269 bytes** for the $10,200 profile. The inflated output may exceed game-specific decompressor input assumptions or break validation; independently, the 20CM wrapper still has unknown integrity checks.
+
+A second *bounded LZ-style* JDLZ encoder based on the proven hash-chain match scheme of [OpenNFSTools JDLZ.cs](https://github.com/MWisBest/OpenNFSTools/blob/master/LibNFS/Compression/JDLZ.cs) was independently tested on the authentic $10,200 profile. Results:
+- Recompressed the **identical, unchanged** 32,768-byte career table into **3,599 bytes**; byte-for-byte decompression matches original career data.
+- Modified only `2287685084` field 7 to **100,000** and recompressed the 32,768-byte career data into **3,602 bytes**; the decompressor reproduces the intended modified table byte-for-byte.
+- Both candidates retain the exact outer 262,236-byte save length, the unchanged source `Game` MD5 and all other regions of the file except JDLZ bytes and **two** JDLZ frame-size fields at `0x4C` and `0x34BB0`. The unknown outer hash/signature fields remain unchanged.
+- The user has NOT tested these two new compact JDLZ candidates in game yet. **The compact format is a hypothesis, NOT a validated solution.**
+
+The local two-stage diagnostic bundle (private; not committed to repo) contains an `A` profile which is only recompressed, with **Cash still 10,200**, and a `B` profile with **100,000 Cash**. If A fails, the issue is not specific to changing the cash value; stop, restore original and investigate wrapper authentication/serialization. If A loads, testing B will determine whether content-specific integrity is involved. Never overwrite the user's only backup.
+
+An unrelated numeric field `2268361667:` field 4 equals 10,200 in the new save but was **0 in the old save** even though starting Cash was 5,000. It is therefore NOT proved to be a second mandatory copy of current Cash. Do not automatically patch this stats field.
+
 ## Carbon test writer v0.13.1: JDLZ alignment fix (2026-10-13)
 
 The user tested the first v0.13 Switch release on the authentic **$10,200** Carbon career save and encountered `UNKNOWN WRAPPER / FRAME LAYOUT`. The program correctly declined to create a candidate file; no live-save overwrite occurred.
