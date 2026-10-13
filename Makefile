@@ -19,7 +19,7 @@ LIBS := -lnx
 LIBDIRS := $(PORTLIBS) $(LIBNX)
 export APP_TITLE := NFS Save Lab NX
 export APP_AUTHOR := Community Project
-export APP_VERSION := 0.6.0
+export APP_VERSION := 0.7.0
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)
 export TOPDIR := $(CURDIR)
@@ -34,6 +34,7 @@ export NROFLAGS += --icon=$(DEVKITPRO)/libnx/default_icon.jpg --nacp=$(CURDIR)/$
 .PHONY: $(BUILD) clean all
 all: $(BUILD)
 $(BUILD):
+	@python3 $(CURDIR)/tools/generate_poster_header.py
 	@mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 clean:
