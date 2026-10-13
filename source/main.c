@@ -50,6 +50,8 @@ static int scan_err=0,patch_err=0;
 static char backup_path[1024]={0};
 static int backup_error=0;
 static int cash_error=0;
+static int bounty_error=0;
+static uint32_t bounty_detected=0,bounty_offset=0;
 static char status_line[190]="READY TO SCAN LOCAL SAVES";
 static Framebuffer fb;
 static uint32_t *pixels;
@@ -201,9 +203,9 @@ static void files_page(void){
 static void action_page(void){
  header("02 / SAFE SAVE TOOLS");
  info_panel("CHOOSE A TOOL","GAME FORMAT GATES PREVENT UNSAFE MODIFICATIONS");
- const char *entries[]={"EDIT CASH (MC02)","CASH SCAN","BOUNTY SCAN","HEAT SCAN",
+ const char *entries[]={"EDIT CASH (MC02)","CASH SCAN","BOUNTY INFO (MC02)","HEAT SCAN",
                        "COMPARE SNAPSHOTS","CREATE BACKUP","RESTORE BACKUP"};
- const char *notes[]={"MOST WANTED ONLY","SEARCH READ ONLY","SEARCH READ ONLY",
+ const char *notes[]={"MOST WANTED ONLY","SEARCH READ ONLY","FIND CHASE BOUNTY",
                      "SEARCH READ ONLY","COMPARE TWO SAVES","KEEP AN ORIGINAL","RESTORE SNAPSHOT"};
  for(int i=0;i<7;i++){
   int y=276+i*44,sel=i==action;
@@ -400,6 +402,22 @@ static void cash_result_page(void){
  }else label(89,445,"IF RECOVERY IS NEEDED, CHECK .oldpart / .bakN");
  footer("B  RETURN TO TOOL MENU");
 }
+static void bounty_view_page(void){
+ header("03 / BOUNTY DATA");
+ info_panel("CHASE RATING","READ ONLY / REGISTERED MC02 RECORD");
+ if(bounty_error){
+   txt(89,310,2,mc02_error(bounty_error),RED);
+   label(89,392,"NOT SUPPORTED FOR THIS SAVE FILE");
+ }else{
+   txt(90,295,2,"BOUNTY:",MUTED);
+   char b[70];snprintf(b,sizeof(b),"%09u",bounty_detected);
+   big_number(91,359,b);
+   snprintf(b,sizeof(b),"RECORD OFFSET: 0x%04X",bounty_offset);
+   txt(92,457,2,b,accent);
+   label(91,513,"READ ONLY UNTIL EDITED BOUNTY IS GAME-TESTED");
+ }
+ footer("B  BACK TO TOOL MENU");
+}
 static void draw(void){
  uint32_t stride;
  pixels=(uint32_t*)framebufferBegin(&fb,&stride);
@@ -415,7 +433,8 @@ static void draw(void){
  case 12:compare_value_page(0);break;case 13:compare_value_page(1);break;
  case 14:comparison_result_page();break;
  case 15:cash_edit_page();break;case 16:cash_confirm_page();break;
- case 17:cash_result_page();break;}
+ case 17:cash_result_page();break;
+ case 18:bounty_view_page();break;}
  if(status_line[0]){
   rect(64,605,1150,23,COLOR(36,45,50));
   cliptext(73,609,2,status_line,WHITE,68);
@@ -496,7 +515,15 @@ static void handle(u64 key,u64 held){
        "EDIT BLOCKED: %s",mc02_error(cash_error));
      else{new_val=old_val;digit=4;screen=15;}
     }
-   }else if(action>=1&&action<=3){
+   }else if(action==2){
+    if(game!=0){
+     bounty_error=-1;bounty_detected=0;bounty_offset=0;
+    }else{
+     bounty_error=mc02_read_bounty(files[selected].path,
+                                   &bounty_detected,&bounty_offset);
+    }
+    screen=18;
+   }else if(action==1||action==3){
     metric=action-1;old_val=metric==2?1:0;digit=4;screen=2;
    }else if(action==4){
     metric=0;load_backups();screen=11;
@@ -585,6 +612,7 @@ static void handle(u64 key,u64 held){
       "HOLD ZL + ZR AND PRESS A TO CONFIRM");
   }
  }else if(screen==17&&key&HidNpadButton_B)screen=7;
+ else if(screen==18&&key&HidNpadButton_B)screen=7;
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
