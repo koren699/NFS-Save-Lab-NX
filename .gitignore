@@ -1,0 +1,7 @@
+build/
+*.nro
+*.elf
+*.nacp
+source/poster_embedded.h
+__pycache__/
+*.pyc
