@@ -57,8 +57,73 @@ static Framebuffer fb;
 static uint32_t *pixels;
 static int pitch;
 static uint32_t accent=GREEN;
+#define HD_POSTER_W 336
+#define HD_POSTER_H 360
+#define HD_POSTER_PIXELS (HD_POSTER_W*HD_POSTER_H)
+#define HD_POSTER_BYTES (3u*HD_POSTER_PIXELS*2u)
+#define HD_TRAILER_BYTES 20u
+static unsigned char *hd_posters=NULL;
+/* v0.8 single-file poster bundle: an optional 725760-byte RGB565 payload
+   followed by "NFSLABP8", version 1, dimensions and payload length.
+   Everything is read-only. Existing unbundled NROs use the old posters. */
+static uint32_t get_le32(const unsigned char *p){
+ return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
+}
+static uint16_t get_le16(const unsigned char *p){
+ return (uint16_t)p[0]|((uint16_t)p[1]<<8);
+}
+static int poster_load_file(const char *path){
+ if(!path || !*path || strlen(path)>850)return 0;
+ FILE *fp=fopen(path,"rb");if(!fp)return 0;
+ int ok=0;
+ do {
+  if(fseek(fp,0,SEEK_END)!=0)break;
+  long len=ftell(fp);
+  if(len<0 || (unsigned long)len<HD_POSTER_BYTES+HD_TRAILER_BYTES)break;
+  if(fseek(fp,-(long)HD_TRAILER_BYTES,SEEK_END)!=0)break;
+  unsigned char t[HD_TRAILER_BYTES];
+  if(fread(t,1,sizeof(t),fp)!=sizeof(t))break;
+  if(memcmp(t,"NFSLABP8",8)!=0 || get_le32(t+8)!=1 ||
+     get_le16(t+12)!=HD_POSTER_W || get_le16(t+14)!=HD_POSTER_H ||
+     get_le32(t+16)!=HD_POSTER_BYTES)break;
+  if(fseek(fp,-(long)(HD_POSTER_BYTES+HD_TRAILER_BYTES),SEEK_END)!=0)break;
+  unsigned char *buf=(unsigned char*)malloc(HD_POSTER_BYTES);
+  if(!buf)break;
+  if(fread(buf,1,HD_POSTER_BYTES,fp)!=HD_POSTER_BYTES){free(buf);break;}
+  hd_posters=buf;ok=1;
+ }while(0);
+ fclose(fp);return ok;
+}
+static void poster_hd_init(int argc,char **argv){
+ if(argc>0 && argv && argv[0] && poster_load_file(argv[0]))return;
+ /* HBMenu can run an NRO without passing its own path in argv. */
+ const char *paths[]={
+  "sdmc:/switch/nfs_save_lab_nx.nro",
+  "sdmc:/switch/NFS_Save_Lab_NX/nfs_save_lab_nx.nro",
+  "sdmc:/switch/nfs_save_lab_nx_v0.8.nro",
+  NULL
+ };
+ for(int i=0;paths[i];i++)if(poster_load_file(paths[i]))return;
+}
 static void poster_draw(int idx,int x,int y,int w,int h){
  if(idx<0||idx>=3)return;
+ if(hd_posters){
+  const unsigned char *rgb=hd_posters+idx*(HD_POSTER_PIXELS*2u);
+  for(int dy=0;dy<h;dy++){
+   int sy=dy*HD_POSTER_H/h;
+   uint32_t *dest=pixels+(y+dy)*pitch+x;
+   for(int dx=0;dx<w;dx++){
+    int sx=dx*HD_POSTER_W/w;
+    size_t at=2u*((size_t)sy*HD_POSTER_W+(size_t)sx);
+    uint16_t v=(uint16_t)(rgb[at]|((uint16_t)rgb[at+1]<<8));
+    int r=((v>>11)&31)*255/31;
+    int g=((v>>5)&63)*255/63;
+    int b=(v&31)*255/31;
+    dest[dx]=COLOR(r,g,b);
+   }
+  }
+  return;
+ }
  const unsigned char *palette=poster_palettes[idx];
  const unsigned char *indices=poster_indices[idx];
  for(int dy=0;dy<h;dy++){
@@ -125,7 +190,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.7.0",WHITE);
+ txt(980,42,2,"BUILD 0.8.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -619,6 +684,7 @@ int main(int argc,char **argv){
  NWindow *win=nwindowGetDefault();
  if(R_FAILED(framebufferCreate(&fb,win,SW,SH,PIXEL_FORMAT_RGBA_8888,2)))return 1;
  if(R_FAILED(framebufferMakeLinear(&fb))){framebufferClose(&fb);return 1;}
+ poster_hd_init(argc,argv);
  padConfigureInput(1,HidNpadStyleSet_NpadStandard);
  PadState pad;padInitializeDefault(&pad);
  draw();
@@ -629,5 +695,6 @@ int main(int argc,char **argv){
   if(key){handle(key,padGetButtons(&pad));draw();}
   svcSleepThread(16000000L);
  }
+ free(hd_posters);hd_posters=NULL;
  framebufferClose(&fb);return 0;
 }
