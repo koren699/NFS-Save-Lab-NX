@@ -114,6 +114,44 @@ static void make_tag(const unsigned char *save,unsigned which,
  * Zero-key HMAC-SHA1 is NOT the XBE-derived retail key! The fields at
  * 0x08 (16) and 0x0C (0x40000) describe the two data ranges.
  */
+/* Generic original Xbox 20CM signing layout shared by Carbon and U2.
+ * The title-specific caller strictly validates full file size and headers.
+ * All-zero HMAC key was confirmed against both games' real save data. */
+static int xbox_20cm_layout(const unsigned char *p,size_t n,
+                            size_t *first,size_t *second){
+ if(!p||n<0x54u||n>0x100000u||memcmp(p,"20CM",4)||
+    le32(p+4)!=n)return -1;
+ *first=le32(p+8);*second=le32(p+12);
+ if(*first<8u||*first>0x100u||*second<1u||
+    *second>n-0x4cu-*first||0x4cu+*first+*second!=n)return -1;
+ return 0;
+}
+static int xbox_20cm_do(unsigned char *data,size_t n,int sign){
+ size_t a=0,b=0;
+ if(xbox_20cm_layout(data,n,&a,&b))return -1;
+ static const unsigned char key[16]={0};
+ const size_t offsets[3]={0x10,0x24,0x38};
+ const size_t begins[3]={0x4c,0x4c+a,0};
+ const size_t counts[3]={a,b,0x38};
+ unsigned bad=0;
+ unsigned char digest[20];
+ for(int i=0;i<3;i++){
+  hmac_sha1(key,16,data+begins[i],counts[i],digest);
+  if(sign)memcpy(data+offsets[i],digest,20);
+  else for(unsigned j=0;j<20;j++)bad|=(unsigned)(data[offsets[i]+j]^digest[j]);
+ }
+ memset(digest,0,sizeof(digest));
+ return bad?-3:0;
+}
+int xbox_20cm_verify_zero(const unsigned char *data,size_t n){
+ return xbox_20cm_do((unsigned char*)data,n,0);
+}
+int xbox_20cm_sign_zero(unsigned char *data,size_t n){
+ if(!data)return -1;
+ int r=xbox_20cm_do(data,n,1);
+ if(r)return r;
+ return xbox_20cm_verify_zero(data,n);
+}
 int carbon_auth_verify_zero_buffer(const unsigned char *save,size_t n){
  if(!valid(save,n))return -1;
  uint32_t first=le32(save+8),second=le32(save+12);
