@@ -1,6 +1,10 @@
 name: Publish Full HD Release
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-release.yml'
   workflow_dispatch:
     inputs:
       version:
@@ -17,9 +21,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Extract Full HD NRO and four screenshots from the uploaded kit
+        run: |
+          set -euo pipefail
+          KIT="release-assets/v0.16/NFS_Save_Lab_NX_v0.16_GitHub_Release_Kit.zip"
+          test -s "$KIT" || {
+            echo "Missing GitHub Release Kit ZIP in release-assets/v0.16."
+            exit 1
+          }
+          mkdir -p docs/screenshots
+          unzip -p "$KIT" "02_Upload_to_release-assets_v0.16/nfs_save_lab_nx.nro" \
+            > "release-assets/v0.16/nfs_save_lab_nx.nro"
+          for screenshot in \
+            01-main-menu.jpg \
+            02-most-wanted-save-list.jpg \
+            03-underground-2-profiles.jpg \
+            04-carbon-cash.jpg
+          do
+            unzip -p "$KIT" "01_Upload_to_docs_screenshots/$screenshot" \
+              > "docs/screenshots/$screenshot"
+          done
+          test -s release-assets/v0.16/nfs_save_lab_nx.nro
+          echo "Extracted tested NRO and four screenshots"
+
       - name: Verify tested Full HD NRO
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version || 'v0.16' }}
         run: |
           set -euo pipefail
           test "$VERSION" = "v0.16" || { echo "This workflow is configured only for v0.16."; exit 1; }
@@ -67,7 +94,7 @@ jobs:
       - name: Publish or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version || 'v0.16' }}
         run: |
           set -euo pipefail
           TITLE="NFS Save Lab NX ${VERSION} — Most Wanted / Underground 2 / Carbon"
