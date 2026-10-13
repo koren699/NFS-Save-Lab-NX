@@ -18,6 +18,9 @@
 #define PATH_CAP 768
 #define MAX_LABEL 112
 #define MAX_ROWS 7
+#define POSTER_W 168
+#define POSTER_H 210
+#define POSTER_BYTES (POSTER_W*POSTER_H*3)
 #define COLOR(r,g,b) RGBA8_MAXALPHA(r,g,b)
 #define BG COLOR(9,13,18)
 #define PANEL COLOR(18,25,32)
@@ -54,6 +57,42 @@ static Framebuffer fb;
 static uint32_t *pixels;
 static int pitch;
 static uint32_t accent=GREEN;
+static unsigned char *poster_data[3]={0};
+static int poster_loaded[3]={0};
+static const char *poster_paths[3]={
+ "sdmc:/switch/NFS_Save_Lab_NX/posters/mw.rgb",
+ "sdmc:/switch/NFS_Save_Lab_NX/posters/u2.rgb",
+ "sdmc:/switch/NFS_Save_Lab_NX/posters/cx.rgb"
+};
+static void poster_init(void){
+ for(int i=0;i<3;i++){
+  unsigned char *mem=(unsigned char*)malloc(POSTER_BYTES);
+  if(!mem)continue;
+  FILE *f=fopen(poster_paths[i],"rb");
+  if(!f){free(mem);continue;}
+  int ok=(fread(mem,1,POSTER_BYTES,f)==POSTER_BYTES);
+  if(fgetc(f)!=EOF)ok=0;
+  if(fclose(f)!=0)ok=0;
+  if(!ok){free(mem);continue;}
+  poster_data[i]=mem;poster_loaded[i]=1;
+ }
+}
+static void poster_release(void){
+ for(int i=0;i<3;i++){free(poster_data[i]);poster_data[i]=NULL;poster_loaded[i]=0;}
+}
+static void poster_draw(int idx,int x,int y,int w,int h){
+ if(idx<0||idx>2||!poster_loaded[idx])return;
+ const unsigned char *src=poster_data[idx];
+ for(int dy=0;dy<h;dy++){
+  int sy=(dy*POSTER_H)/h;
+  uint32_t *dest=pixels+(y+dy)*pitch+x;
+  for(int dx=0;dx<w;dx++){
+   int sx=(dx*POSTER_W)/w;
+   const unsigned char *rgb=src+3*(sy*POSTER_W+sx);
+   dest[dx]=COLOR(rgb[0],rgb[1],rgb[2]);
+  }
+ }
+}
 
 static void rect(int x,int y,int w,int h,uint32_t c){
  if(x<0){w+=x;x=0;} if(y<0){h+=y;y=0;}
@@ -108,7 +147,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.5.0",WHITE);
+ txt(980,42,2,"BUILD 0.6.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -130,28 +169,35 @@ static void footer(const char *shortline){
  label(67,685,"CASH: VERIFIED MC02 ONLY   /   BOUNTY + HEAT: READ ONLY");
 }
 static void game_card(int idx,int x,int y){
- int active=game==idx,w=360,h=355;
- frame(x,y,w,h,active);
- uint32_t c=idx==0?GREEN:idx==1?COLOR(69,209,241):COLOR(247,164,67);
- rect(x+15,y+15,w-30,118,COLOR(12,19,25));
- for(int z=0;z<13;z++){
-  int ax=x+132+z*24;
-  line(ax,y+15,ax-85,y+132,COLOR(38,52,55),1);
+ int active=(game==idx),w=356,h=426;
+ uint32_t c=idx==0?GREEN:(idx==1?COLOR(69,209,241):COLOR(247,164,67));
+ rect(x-3,y-3,w+6,h+6,active?c:COLOR(37,71,90));
+ rect(x,y,w,h,COLOR(11,19,25));
+ if(poster_loaded[idx]){
+  poster_draw(idx,x+10,y+9,w-20,360);
+ }else{
+  rect(x+10,y+9,w-20,360,COLOR(18,29,34));
+  for(int j=0;j<13;j++)line(x+60+j*26,y+9,x+j*26,y+365,COLOR(35,52,57),1);
+  txt(x+38,y+85,4,idx==0?"MW":idx==1?"U2":"CX",c);
+  txt(x+23,y+188,2,"PIXEL POSTER",WHITE);
+  txt(x+23,y+222,2,"ART PACK MISSING",RED);
+  txt(x+23,y+260,2,"EXTRACT FULL ZIP",MUTED);
  }
- rect(x+18,y+15,9,118,c);
- txt(x+40,y+37,5,idx==0?"MW":idx==1?"U2":"CX",WHITE);
- txt(x+44,y+102,2,idx==0?"2005":idx==1?"2004":"2006",c);
- txt(x+22,y+164,3,game_names[idx],active?WHITE:COLOR(201,213,218));
- txt(x+22,y+220,2,game_descriptions[idx],MUTED);
- rect(x+22,y+266,316,1,COLOR(60,73,79));
- txt(x+22,y+290,2,idx==0?"PORT / RECOMP X360":"PORT / RECOMP XBOX",active?c:MUTED);
- if(active){pill(x+210,y+20,"SELECTED",c);}
+ rect(x+10,y+373,w-20,44,COLOR(11,21,26));
+ rect(x+10,y+373,w-20,2,c);
+ txt(x+20,y+387,2,game_names[idx],active?c:WHITE);
+ txt(x+w-65,y+387,2,idx==0?"2005":idx==1?"2004":"2006",MUTED);
+ if(active){
+  rect(x-9,y-9,30,5,c);rect(x-9,y-9,5,30,c);
+  rect(x+w-21,y-9,30,5,c);rect(x+w+4,y-9,5,30,c);
+  rect(x-9,y+h+4,30,5,c);rect(x-9,y+h-21,5,30,c);
+  rect(x+w-21,y+h+4,30,5,c);rect(x+w+4,y+h-21,5,30,c);
+ }
 }
 static void dashboard(void){
- header("SELECT A PORT");
- txt(65,185,4,"YOUR GARAGE.",WHITE);
- txt(65,231,2,"CHOOSE THE GAME TO ANALYZE LOCAL SAVE DATA",MUTED);
- for(int i=0;i<3;i++)game_card(i,65+i*392,274);
+ header("SELECT A GAME");
+ txt(66,169,2,"L / R  CHOOSE GAME       A  OPEN SAVE BROWSER",MUTED);
+ for(int i=0;i<3;i++)game_card(i,61+i*394,195);
  footer("L / R  CHANGE GAME       A  OPEN SAVE BROWSER       +  EXIT");
 }
 static void info_panel(const char *heading,const char *subtitle){
@@ -578,6 +624,7 @@ int main(int argc,char **argv){
  NWindow *win=nwindowGetDefault();
  if(R_FAILED(framebufferCreate(&fb,win,SW,SH,PIXEL_FORMAT_RGBA_8888,2)))return 1;
  if(R_FAILED(framebufferMakeLinear(&fb))){framebufferClose(&fb);return 1;}
+ poster_init();
  padConfigureInput(1,HidNpadStyleSet_NpadStandard);
  PadState pad;padInitializeDefault(&pad);
  draw();
@@ -588,5 +635,5 @@ int main(int argc,char **argv){
   if(key){handle(key,padGetButtons(&pad));draw();}
   svcSleepThread(16000000L);
  }
- framebufferClose(&fb);return 0;
+ poster_release();framebufferClose(&fb);return 0;
 }
