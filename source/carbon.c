@@ -217,7 +217,12 @@ int carbon_create_cash_test(const char *path,uint32_t expected_cash,uint32_t new
  if(!path||!test_path||capacity<64)return -3;
  test_path[0]=0;
  if(strstr(path,".nfslab.")||strlen(path)>800)return -3;
- int n=snprintf(test_path,capacity,"%s.nfslab.carbon.test",path);
+ /* Put test file next to original, but NEVER give it an ALIAS_ prefix:
+  * the game enumerates ALIAS_ profiles and must not see candidates. */
+ const char *base=strrchr(path,'/');
+ base=base?base+1:path;
+ int prefix=(int)(base-path);
+ int n=snprintf(test_path,capacity,"%.*sNFSLAB_TEST_%s",prefix,path,base);
  if(n<=0||(size_t)n>=capacity){test_path[0]=0;return -3;}
  /* Explicit no-overwrite guarantee; never use rb+ or rename on original. */
  FILE *existing=fopen(test_path,"rb");
