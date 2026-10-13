@@ -1,24 +1,28 @@
-# NFS Save Lab NX — v0.5
+# NFS Save Lab NX — v0.6
 
-Nintendo Switch graphical save-file utility for community Need for Speed ports.
+Nintendo Switch save-file homebrew for fan-made Need for Speed ports. **Pixel-art game posters are now used in the home menu.**
 
-**NEW: Verified Most Wanted Xbox 360 MC02 Cash editing.** Two genuine files (Cash 900 and 14400) established a 32-bit big-endian Cash field at `0x4039`. The user confirmed that a separately edited test save with **Cash 400000** loads in-game. The equivalent native Switch code is compiled and regression-tested against the known Python algorithm, but **the new v0.5 Switch UI itself has not yet been hardware-tested**.
+## Install v0.6 (important: copy the art too!)
 
-The `EDIT CASH (MC02)` operation:
-- Is restricted to **Most Wanted Xbox 360**, live save (not a backup mirror), exact 62688-byte MC02 profile with all **4 valid integrity values** (MD5 and EA CRC1–3).
-- Automatically reads current Cash and lets you choose **any target 0–999,999,999** using the D-pad; no forced maximum.
-- Requires **ZL+ZR+A** after reviewing old and new values.
-- Creates a verified `<save>.nfslab.bakN` before writing, produces and verifies the fully hashed result, and preserves recovery files if the process cannot recover cleanly.
-- Refuses unknown structures, wrong sums, stale current Cash, and temp-file conflicts.
+The graphics pack is supplied **alongside**, not inside the executable. Extract the full release ZIP into the microSD root, preserving the folders:
 
-**Back up your working career independently BEFORE TESTING.** Filesystem/power failures can still damage saves. Close the game when editing. Do not try on a valuable career before a throwaway profile test.
+```text
+sdmc:/switch/nfs_save_lab_nx.nro
+sdmc:/switch/NFS_Save_Lab_NX/posters/mw.rgb
+sdmc:/switch/NFS_Save_Lab_NX/posters/u2.rgb
+sdmc:/switch/NFS_Save_Lab_NX/posters/cx.rgb
+```
 
-Other features remain: read-only Cash/Bounty/Heat number scans, read-only before/after snapshot comparison, verified manual backup and restore. There is **no** verified edit support yet for Bounty, Heat, Underground 2, or Carbon. `*.header` metadata and the port's `Headers` directory are excluded from the save browser.
+The `.rgb` images are prepared 168×210 RGB24 pixel-art assets. They have been cropped and resized from game posters and appear in the three selection cards. **If you copy only the NRO, it will still launch, but shows an “ART PACK MISSING” fallback instead of posters.**
 
-## Install and operate
+## Money editing
 
-[GitHub Actions builds](https://github.com/koren699/NFS-Save-Lab-NX/actions/workflows/build.yml) → latest green run → Artifacts `NFS-Save-Lab-NX` → unzip `nfs_save_lab_nx.nro` to `sdmc:/switch/`. Run in HBMenu with the game closed.
+The v0.5 Most Wanted Xbox 360 MC02 Cash editor is preserved unchanged: exact 62688-byte file, verified MD5+three EA CRCs, verified backup, explicit controller confirmation; 0–999999999 custom amount. Cash editing succeeded on a real in-game save, including a successful v0.5 user hardware test. Bounty and Heat remain read-only pending verified field locations.
 
-Home screen L/R selects game → A lists saves → choose **[LIVE]** file → **EDIT CASH (MC02)** → D-pad chooses target number → A reviews → hold ZL+ZR and press A to commit. B returns.
+**Back up your real career outside the game's save folder before editing.** Close the game first.
 
-[Українська інструкція](README_UA.md) · [Format research log](docs/FORMAT_RESEARCH.md)
+## Repository and build
+
+[GitHub Actions](https://github.com/koren699/NFS-Save-Lab-NX/actions/workflows/build.yml) compiles the NRO. Build artifacts contain the NRO only. Download the full **v0.6 bundle** supplied with the release/conversation for the poster assets.
+
+[Українська інструкція](README_UA.md)
