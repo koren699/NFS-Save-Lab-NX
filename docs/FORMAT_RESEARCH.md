@@ -22,6 +22,27 @@ A single privately supplied **62688-byte (0xF4E0)** MC02 save was inspected **re
 
 The older Xbox Original tool's HMAC-SHA1 save signing scheme is *not* the verified layout above. The sample uses the MC02/EA CRC32/MD5 layout; the same CRC variant appears in EA's published community reverse engineering notes. Other game ports may use different formats.
 
+## Two-save validation (second private user sample, 2026-10-13)
+
+A second 62688-byte MC02 save from the same in-game career was inspected, with displayed **Cash 14400** (previous sample: 900). The raw files remain private; only findings are published.
+
+- Both saves contain the four correctly matching integrity checks (one MD5 and three EA CRC32).
+- At the **same offset 0x4039**, the 4-byte big-endian integer changed from `00 00 03 84` (900) to `00 00 38 40` (14400). This was the **only** 32-bit big-endian occurrence of each stated Cash value in its respective save.
+- Binary comparison: **40 changed bytes across 13 contiguous ranges**. Changes include Cash, CRC #2 and #3, final MD5, and additional game-state data. CRC #1 remained stable.
+- The previously hypothesized Bounty candidate at `0x010E` remained float32 big-endian `31550.0` in both saves, consistent with the user providing no Bounty change; a separate before/after Bounty pair remains necessary.
+- Strict research-only script `tools/mc02_cash_test_copy.py` can recompute the verified hashes and produce a new **separate** test copy under explicit opt-in. It never overwrites the original or existing output. An in-game round-trip load of a *patched* test copy is still unverified. No live write option is enabled in the Switch NRO.
+
+### Checksum dependencies on validated MC02 files
+
+```
+CRC1 @ 0x10 = EA_CRC32(data[0x1C:0x24])        # stable
+MD5  @ EOF-16 = MD5(data[0x34:EOF-16])        # after data changes
+CRC2 @ 0x14 = EA_CRC32(data[0x24:EOF])         # includes new MD5
+CRC3 @ 0x18 = EA_CRC32(data[0:0x18])           # includes new CRC2
+```
+
+The MC02 cash candidate is much stronger now; **do not infer that an altered save is loadable** until tested on a disposable game profile.
+
 ## Not established
 - Actual Xbox 360 file internals (record IDs, compression/encryption, money/bounty/heat mapping).
 - Confirmed successful game-side validation of newly recomputed checksums after any modified field; so far only existing hashes were verified on one untouched file.
