@@ -19,7 +19,7 @@ LIBS := -lnx
 LIBDIRS := $(PORTLIBS) $(LIBNX)
 export APP_TITLE := NFS Save Lab NX
 export APP_AUTHOR := Community Project
-export APP_VERSION := 0.13.0
+export APP_VERSION := 0.13.1
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT := $(CURDIR)/$(TARGET)
 export TOPDIR := $(CURDIR)
