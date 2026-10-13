@@ -35,7 +35,8 @@ static const char *game_root[][6]={
  {"sdmc:/switch/nfsmw-nx/nfsmw","sdmc:/switch/nfsmw/nfsmw",
   "sdmc:/switch/nfsmw-nx/saves","sdmc:/switch/nfsmw/saves",NULL},
  {"sdmc:/switch/nfsu2x/game/UDATA","sdmc:/switch/nfsu2x/game/Save",NULL},
- {"sdmc:/switch/nfscx/game/UDATA","sdmc:/switch/nfscx/game/Save",NULL}
+ {"sdmc:/switch/nfscx/save","sdmc:/switch/nfscx/game/UDATA",
+  "sdmc:/switch/nfscx/game/Save",NULL}
 };
 static SaveFile files[MAX_FILES];
 static int nfiles=0,selected=0,game=0,screen=0,match_idx=0,digit=4;
@@ -193,7 +194,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.9.0",WHITE);
+ txt(980,42,2,"BUILD 0.10.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -252,9 +253,37 @@ static void info_panel(const char *heading,const char *subtitle){
  pill(862,451,game==0?"CASH MC02":"READ ONLY",accent);
  label(862,520,"VERIFIED HASH / BACKUP");
 }
+static void carbon_file_details(void){
+ rect(840,182,375,420,COLOR(22,31,37));
+ rect(840,182,6,420,accent);
+ txt(863,207,2,"CARBON SAVE CHECK",WHITE);
+ label(863,257,"PORT: ORIGINAL XBOX");
+ if(nfiles<=0 || selected<0 || selected>=nfiles){
+  label(863,321,"NO SAVE FILE SELECTED");
+  return;
+ }
+ const SaveFile *f=&files[selected];
+ label(863,312,"FILENAME");
+ cliptext(863,345,2,f->name,WHITE,20);
+ char b[76];
+ snprintf(b,sizeof(b),"SIZE: %u BYTES",f->size);
+ txt(863,388,2,b,accent);
+ unsigned char lead[8]={0};
+ size_t n=0;
+ FILE *fp=fopen(f->path,"rb");
+ if(fp){n=fread(lead,1,sizeof(lead),fp);fclose(fp);}
+ label(863,433,"FIRST 8 BYTES / HEX");
+ if(n==8){
+  snprintf(b,sizeof(b),"%02X %02X %02X %02X %02X %02X %02X %02X",
+   lead[0],lead[1],lead[2],lead[3],lead[4],lead[5],lead[6],lead[7]);
+  txt(863,462,2,b,WHITE);
+ }else txt(863,462,2,"UNABLE TO READ HEADER",RED);
+ label(863,535,"READ ONLY: SEND SAVE TO ANALYZE");
+}
 static void files_page(void){
  header("01 / LOCAL SAVE FILES");
  info_panel("SELECT A SAVE","UP / DOWN TO PICK A FILE.  A TO CONTINUE.");
+ if(game==2)carbon_file_details();
  int start=selected-3;if(start<0)start=0;if(start>nfiles-MAX_ROWS)start=nfiles-MAX_ROWS;if(start<0)start=0;
  for(int z=0;z<MAX_ROWS;z++){
   int i=start+z;if(i>=nfiles)break;
@@ -570,7 +599,7 @@ static void draw(void){
 static int is_dir(const char *p){struct stat st;return stat(p,&st)==0&&S_ISDIR(st.st_mode);}
 static int suitable(const char *name){
  if(name[0]=='.'||strstr(name,".nfslab."))return 0;
- const char *bad[]={".nro",".nsp",".xex",".xbe",".iso",".png",".jpg",".dds",".log",".toml",".nfsp",".bak",".tmp",".xml",".txt",".zip",".7z",".header",NULL};
+ const char *bad[]={".nro",".nsp",".xex",".xbe",".iso",".png",".jpg",".dds",".log",".toml",".nfsp",".bak",".tmp",".xml",".txt",".zip",".7z",".header",".img",NULL};
  for(int i=0;bad[i];i++){size_t n=strlen(name),s=strlen(bad[i]);if(n>=s&&!strcasecmp(name+n-s,bad[i]))return 0;}
  return 1;
 }
