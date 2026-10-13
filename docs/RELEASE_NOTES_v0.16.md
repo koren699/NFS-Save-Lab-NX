@@ -1,4 +1,30 @@
-# NFS Save Lab NX v0.16 — Most Wanted / Underground 2 / Carbon
+# NFS Save Lab NX v0.16 — Full HD Edition
+
+**Nintendo Switch homebrew save editor for Most Wanted (2005), Underground 2, and Carbon.** All four editing features have been successfully tested in-game on real hardware.
+
+> **Download:** Under **Assets**, choose `nfs_save_lab_nx_v0.16.nro` (ready to place on your Switch) or the Full HD ZIP. **Do not use “Source code (zip)”**—it does not contain the ready-to-run editor. The app requires the corresponding fan-made Switch game ports; it does not edit PC saves.
+
+## Screenshots / Скриншоти / Скриншоты
+
+![NFS Save Lab NX v0.16 — pixel-art selection menu for all three supported Need for Speed games](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/01-main-menu.jpg)
+
+<details>
+<summary>View 3 more screenshots · Ще 3 скриншоти · Ещё 3 скриншота</summary>
+
+**Most Wanted — save browser / вибір збереження / выбор сохранения**
+
+![Most Wanted — NFS Save Lab NX save browser](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/02-most-wanted-save-list.jpg)
+
+**Underground 2 — career selection / вибір кар'єри / выбор карьеры**
+
+![Underground 2 — NFS Save Lab NX career selection](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/03-underground-2-profiles.jpg)
+
+**Carbon — Cash editor and verified signatures / гроші та перевірка підписів**
+
+![Carbon — NFS Save Lab NX cash balance and Xbox HMAC verification](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/04-carbon-cash.jpg)
+
+</details>
+
 
 ## 🇺🇦 Українська
 
@@ -57,3 +83,5 @@
 **Unofficial community project · Неофіційний фанатський проєкт · Неофициальный фанатский проект**
 
 Not affiliated with Electronic Arts or Nintendo. Back up your saves before editing. / Не пов’язаний з Electronic Arts або Nintendo. Зробіть резервну копію. / Не связан с Electronic Arts или Nintendo. Делайте резервные копии.
+
+**Links / Посилання / Ссылки:** [Project README (EN)](../../README.md) · [Українська](../../README_UA.md) · [Русский](../../README_RU.md)
