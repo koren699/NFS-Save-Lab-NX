@@ -52,6 +52,20 @@ int main(void){
  assert(carbon_auth_verify_file(save_path,xbe_path)==-2);
  assert(!remove(xbe_path));
  assert(!remove(save_path));
+ /* Genuine Switch Carbon profile scheme: zero HMAC key,
+    header-provided first=0x10 and second=0x40000 lengths. */
+ unsigned mask=0;
+ assert(carbon_auth_sign_switch_buffer(save,0x4005c)==0);
+ assert(carbon_auth_verify_switch_buffer(save,0x4005c,&mask)==0 && mask==7);
+ save[0x100]^=1;
+ assert(carbon_auth_verify_switch_buffer(save,0x4005c,&mask)==-3 && mask==5);
+ save[0x100]^=1;
+ assert(carbon_auth_verify_switch_buffer(save,0x4005c,&mask)==0 && mask==7);
+ /* Changing header first-segment bytes invalidates tag 1 and tag 3. */
+ save[0x4c]^=1;
+ assert(carbon_auth_verify_switch_buffer(save,0x4005c,&mask)==-3 && mask==6);
+ save[0x4c]^=1;
+ assert(carbon_auth_verify_switch_buffer(save,0x4005c,&mask)==0 && mask==7);
  free(save);
  puts("PASS: Carbon title XBE lookup, 3x Xbox HMAC SHA1 known vectors and tamper detection");
  return 0;
