@@ -1,5 +1,9 @@
 # Underground 2 (Original Xbox → Switch) — Cash research
 
+## Native v0.16 app confirmed in-game (2026-10-13)
+
+The user reports that **NFS Save Lab NX v0.16 successfully changes Underground 2 Cash through its on-console UI** and that the game accepts the edited save. This independently validates the native application beyond the earlier standalone signed save patch. Most Wanted Cash/Bounty and Carbon Cash have also been user-tested on a real Switch. Keep the game's save closed during editing, maintain independent backups, and fail closed on unsupported file layouts.
+
 ## Game-tested Cash offset, native editor in v0.16 (2026-10-13)
 
 **Confirmed on the user's real Nintendo Switch:** the isolated patch from **125 → 100,000 Cash** loaded successfully in Underground 2, and the user verified that the money edit works. The authentic career layout is 53,868-byte **Original Xbox 20CM**, with LE32 Cash at **0xA19A** and all three HMAC-SHA1 tags signed using the game-tested **16 zero-byte key**. This is no longer just a candidate field.
