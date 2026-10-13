@@ -200,7 +200,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.13.0",WHITE);
+ txt(980,42,2,"BUILD 0.13.1",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -255,11 +255,13 @@ static void info_panel(const char *heading,const char *subtitle){
  txt(862,204,3,"SAVE STATUS",WHITE);
  label(862,252,"TARGET GAME");
  txt(862,284,2,game_names[game],accent);
- label(862,331,"CURRENT VALUE");
- char b[50];snprintf(b,sizeof(b),"%09u",old_val);txt(862,362,3,b,WHITE);
+ label(862,331,game==2?"ORIGINAL CASH":"CURRENT VALUE");
+ char b[50];
+ snprintf(b,sizeof(b),"%09u",game==2?carbon_cash_value:old_val);
+ txt(862,362,3,b,WHITE);
  label(862,416,"EDITOR STATUS");
- pill(862,451,game==0?"CASH MC02":"READ ONLY",accent);
- label(862,520,"VERIFIED HASH / BACKUP");
+ pill(862,451,game==0?"CASH MC02":game==2?"TEST COPY":"READ ONLY",accent);
+ label(862,520,game==2?"GAME SIGNATURE UNVERIFIED":"VERIFIED HASH / BACKUP");
 }
 static void files_page(void){
  if(game==2){
