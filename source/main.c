@@ -10,6 +10,7 @@
 #include "backup.h"
 #include "diagnostics.h"
 #include "mc02.h"
+#include "poster_embedded.h"
 #include "font8x8_basic.h"
 
 #define SW 1280
@@ -18,9 +19,6 @@
 #define PATH_CAP 768
 #define MAX_LABEL 112
 #define MAX_ROWS 7
-#define POSTER_W 168
-#define POSTER_H 210
-#define POSTER_BYTES (POSTER_W*POSTER_H*3)
 #define COLOR(r,g,b) RGBA8_MAXALPHA(r,g,b)
 #define BG COLOR(9,13,18)
 #define PANEL COLOR(18,25,32)
@@ -57,43 +55,21 @@ static Framebuffer fb;
 static uint32_t *pixels;
 static int pitch;
 static uint32_t accent=GREEN;
-static unsigned char *poster_data[3]={0};
-static int poster_loaded[3]={0};
-static const char *poster_paths[3]={
- "sdmc:/switch/NFS_Save_Lab_NX/posters/mw.rgb",
- "sdmc:/switch/NFS_Save_Lab_NX/posters/u2.rgb",
- "sdmc:/switch/NFS_Save_Lab_NX/posters/cx.rgb"
-};
-static void poster_init(void){
- for(int i=0;i<3;i++){
-  unsigned char *mem=(unsigned char*)malloc(POSTER_BYTES);
-  if(!mem)continue;
-  FILE *f=fopen(poster_paths[i],"rb");
-  if(!f){free(mem);continue;}
-  int ok=(fread(mem,1,POSTER_BYTES,f)==POSTER_BYTES);
-  if(fgetc(f)!=EOF)ok=0;
-  if(fclose(f)!=0)ok=0;
-  if(!ok){free(mem);continue;}
-  poster_data[i]=mem;poster_loaded[i]=1;
- }
-}
-static void poster_release(void){
- for(int i=0;i<3;i++){free(poster_data[i]);poster_data[i]=NULL;poster_loaded[i]=0;}
-}
 static void poster_draw(int idx,int x,int y,int w,int h){
- if(idx<0||idx>2||!poster_loaded[idx])return;
- const unsigned char *src=poster_data[idx];
+ if(idx<0||idx>=3)return;
+ const unsigned char *palette=poster_palettes[idx];
+ const unsigned char *indices=poster_indices[idx];
  for(int dy=0;dy<h;dy++){
   int sy=(dy*POSTER_H)/h;
   uint32_t *dest=pixels+(y+dy)*pitch+x;
   for(int dx=0;dx<w;dx++){
    int sx=(dx*POSTER_W)/w;
-   const unsigned char *rgb=src+3*(sy*POSTER_W+sx);
+   unsigned char pi=indices[sy*POSTER_W+sx];
+   const unsigned char *rgb=palette+3*pi;
    dest[dx]=COLOR(rgb[0],rgb[1],rgb[2]);
   }
  }
 }
-
 static void rect(int x,int y,int w,int h,uint32_t c){
  if(x<0){w+=x;x=0;} if(y<0){h+=y;y=0;}
  if(x+w>SW)w=SW-x;if(y+h>SH)h=SH-y;if(w<=0||h<=0)return;
@@ -147,7 +123,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.6.0",WHITE);
+ txt(980,42,2,"BUILD 0.7.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -173,16 +149,7 @@ static void game_card(int idx,int x,int y){
  uint32_t c=idx==0?GREEN:(idx==1?COLOR(69,209,241):COLOR(247,164,67));
  rect(x-3,y-3,w+6,h+6,active?c:COLOR(37,71,90));
  rect(x,y,w,h,COLOR(11,19,25));
- if(poster_loaded[idx]){
-  poster_draw(idx,x+10,y+9,w-20,360);
- }else{
-  rect(x+10,y+9,w-20,360,COLOR(18,29,34));
-  for(int j=0;j<13;j++)line(x+60+j*26,y+9,x+j*26,y+365,COLOR(35,52,57),1);
-  txt(x+38,y+85,4,idx==0?"MW":idx==1?"U2":"CX",c);
-  txt(x+23,y+188,2,"PIXEL POSTER",WHITE);
-  txt(x+23,y+222,2,"ART PACK MISSING",RED);
-  txt(x+23,y+260,2,"EXTRACT FULL ZIP",MUTED);
- }
+ poster_draw(idx,x+10,y+9,w-20,360);
  rect(x+10,y+373,w-20,44,COLOR(11,21,26));
  rect(x+10,y+373,w-20,2,c);
  txt(x+20,y+387,2,game_names[idx],active?c:WHITE);
@@ -624,7 +591,6 @@ int main(int argc,char **argv){
  NWindow *win=nwindowGetDefault();
  if(R_FAILED(framebufferCreate(&fb,win,SW,SH,PIXEL_FORMAT_RGBA_8888,2)))return 1;
  if(R_FAILED(framebufferMakeLinear(&fb))){framebufferClose(&fb);return 1;}
- poster_init();
  padConfigureInput(1,HidNpadStyleSet_NpadStandard);
  PadState pad;padInitializeDefault(&pad);
  draw();
@@ -635,5 +601,5 @@ int main(int argc,char **argv){
   if(key){handle(key,padGetButtons(&pad));draw();}
   svcSleepThread(16000000L);
  }
- poster_release();framebufferClose(&fb);return 0;
+ framebufferClose(&fb);return 0;
 }
