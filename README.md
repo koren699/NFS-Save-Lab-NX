@@ -1,28 +1,21 @@
-# NFS Save Lab NX — v0.6
+# NFS Save Lab NX v0.7
 
-Nintendo Switch save-file homebrew for fan-made Need for Speed ports. **Pixel-art game posters are now used in the home menu.**
+**Single-file homebrew:** Most Wanted, Underground 2 and Carbon pixel-art posters are now **embedded directly into `nfs_save_lab_nx.nro`**. The external poster resource folder from v0.6 is no longer needed.
 
-## Install v0.6 (important: copy the art too!)
+Place `nfs_save_lab_nx.nro` directly into `sdmc:/switch/` and launch with HBMenu.
 
-The graphics pack is supplied **alongside**, not inside the executable. Extract the full release ZIP into the microSD root, preserving the folders:
+## Verified Most Wanted MC02 Cash
 
-```text
-sdmc:/switch/nfs_save_lab_nx.nro
-sdmc:/switch/NFS_Save_Lab_NX/posters/mw.rgb
-sdmc:/switch/NFS_Save_Lab_NX/posters/u2.rgb
-sdmc:/switch/NFS_Save_Lab_NX/posters/cx.rgb
-```
+Native Cash editing has already been successfully tested in-game with four repaired integrity checksums (MD5 + EA CRC1/2/3). Only validated 62688-byte MC02 saves are permitted. Original is backed up to `.nfslab.bakN`. Always close the game and independently back up the active save.
 
-The `.rgb` images are prepared 168×210 RGB24 pixel-art assets. They have been cropped and resized from game posters and appear in the three selection cards. **If you copy only the NRO, it will still launch, but shows an “ART PACK MISSING” fallback instead of posters.**
+## New in v0.7: dynamic Bounty detector (READ ONLY)
 
-## Money editing
+Two independently supplied MC02 saves reported **Bounty 31550 (float32 BE @ 0x010E)** and **45150 (float32 BE @ 0x015A)**. The record moved, but a 12-byte preceding marker is identical and unique in both saves. The program uses this marker to find and display the current Bounty instead of assuming a fixed offset. Navigate Most Wanted → [LIVE] save → **BOUNTY INFO (MC02)**.
 
-The v0.5 Most Wanted Xbox 360 MC02 Cash editor is preserved unchanged: exact 62688-byte file, verified MD5+three EA CRCs, verified backup, explicit controller confirmation; 0–999999999 custom amount. Cash editing succeeded on a real in-game save, including a successful v0.5 user hardware test. Bounty and Heat remain read-only pending verified field locations.
+**Bounty modification remains disabled until a patched test save is accepted by the game.** Heat and other NFS ports remain diagnostic/read-only.
 
-**Back up your real career outside the game's save folder before editing.** Close the game first.
+## Building
 
-## Repository and build
+A Python 3 standard-library script (`tools/generate_poster_header.py`) processes `assets/posters_embedded.json` into a generated `source/poster_embedded.h` while `make` runs. The packed images are 80×100 indexed/palette art and are scaled by the custom pixel renderer on Switch. The end-user installation requires one NRO file, with no runtime network access or extra artwork.
 
-[GitHub Actions](https://github.com/koren699/NFS-Save-Lab-NX/actions/workflows/build.yml) compiles the NRO. Build artifacts contain the NRO only. Download the full **v0.6 bundle** supplied with the release/conversation for the poster assets.
-
-[Українська інструкція](README_UA.md)
+[GitHub Actions builds](https://github.com/koren699/NFS-Save-Lab-NX/actions/workflows/build.yml) · [Українська інструкція](README_UA.md)
