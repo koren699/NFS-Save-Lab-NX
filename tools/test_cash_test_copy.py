@@ -28,7 +28,6 @@ assert validate(original)==900
 patched=build_test_copy(original,900,14400)
 assert validate(patched)==14400
 assert validate(original)==900
-assert original[:0x4039]==patched[:0x4039][:0x4039] if False else True
 assert original[0x4039:0x403D]==bytes.fromhex("00000384")
 assert patched[0x4039:0x403D]==bytes.fromhex("00003840")
 assert len(original)==len(patched)==62688
