@@ -2,7 +2,7 @@
 
 **Актуальна версія: v0.16.** Домашня програма (homebrew) для редагування збережень фанатських портів **Need for Speed: Most Wanted (2005), Underground 2 та Carbon** на Nintendo Switch.
 
-[🇺🇦 Українська](README_UA.md) · [🇬🇧 English](README.md) · [🇷🇺 Русский](README_RU.md)
+[🇺🇦 Українська](README_UA.md) · [🇬🇧 English](README.md)
 
 ## Можливості
 
