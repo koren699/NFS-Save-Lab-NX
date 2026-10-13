@@ -38,7 +38,7 @@ jobs:
           off=struct.unpack_from("<I",b,0x18)[0]
           magic,vers,io,il,no,nl,ro,rl=struct.unpack_from("<IIQQQQQQ",b,off)
           assert magic==0x54455341 and vers==0 and nl==16384
-          assert b[off+io:off+io+2]==b"\\xff\\xd8", "Pixel HBMenu icon missing"
+          assert b[off+io:off+io+2]==bytes([0xff,0xd8]), "Pixel HBMenu icon missing"
           print(f"Ready for publishing: {p} ({len(b)} bytes)")
           PY
       - name: Build release ZIP
@@ -46,6 +46,15 @@ jobs:
           mkdir -p dist
           cp release-assets/v0.16/nfs_save_lab_nx.nro dist/nfs_save_lab_nx.nro
           (cd dist && zip -9 "NFS_Save_Lab_NX_v0.16_Full_HD.zip" nfs_save_lab_nx.nro)
+      - name: Prepare release description with screenshot
+        env:
+          VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          cp docs/RELEASE_NOTES_v0.16.md dist/release-notes.md
+          if [ -f release-assets/v0.16/screenshot.png ]; then
+            printf '\n\n### Preview / Скріншот / Скриншот\n\n![NFS Save Lab NX interface](https://github.com/%s/releases/download/%s/screenshot.png)\n' "$REPO" "$VERSION" >> dist/release-notes.md
+          fi
       - name: Publish or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,11 +63,11 @@ jobs:
           set -euo pipefail
           TITLE="NFS Save Lab NX ${VERSION} — Most Wanted / Underground 2 / Carbon"
           if gh release view "$VERSION" >/dev/null 2>&1; then
-            gh release edit "$VERSION" --title "$TITLE" --notes-file docs/RELEASE_NOTES_v0.16.md
+            gh release edit "$VERSION" --title "$TITLE" --notes-file dist/release-notes.md
             gh release upload "$VERSION" dist/nfs_save_lab_nx.nro dist/NFS_Save_Lab_NX_v0.16_Full_HD.zip --clobber
           else
             gh release create "$VERSION" dist/nfs_save_lab_nx.nro dist/NFS_Save_Lab_NX_v0.16_Full_HD.zip \
-              --target "${GITHUB_SHA}" --title "$TITLE" --notes-file docs/RELEASE_NOTES_v0.16.md --latest
+              --target "${GITHUB_SHA}" --title "$TITLE" --notes-file dist/release-notes.md --latest
           fi
           if [ -f release-assets/v0.16/screenshot.png ]; then
             gh release upload "$VERSION" release-assets/v0.16/screenshot.png --clobber
