@@ -6,7 +6,7 @@
 **Current version: v0.16** · Tested on a real Nintendo Switch with all three games.
 
 
-[🇺🇦 Українська](README_UA.md) · [🇬🇧 English](README.md) · [🇷🇺 Русский](README_RU.md)
+[🇺🇦 Українська](README_UA.md) · [🇬🇧 English](README.md)
 
 
 
