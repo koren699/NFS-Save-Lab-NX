@@ -32,6 +32,11 @@ def profile(money):
     out[:4]=b"20CM"
     struct.pack_into("<I",out,4,TOTAL)
     out[START:START+len(compressed)]=compressed
+    out[0x34ba8:0x34bac] = bytes.fromhex("22114455")
+    struct.pack_into("<I",out,0x34bac,UNPACK)
+    aligned=(len(compressed)+3)&~3
+    struct.pack_into("<I",out,0x34bb0,aligned+0x18)
+    struct.pack_into("<I",out,0x4c,aligned+0x4c)
     return bytes(out)
 
 with tempfile.TemporaryDirectory(prefix="carbon_synthetic_") as tmp:
@@ -40,4 +45,5 @@ with tempfile.TemporaryDirectory(prefix="carbon_synthetic_") as tmp:
     first.write_bytes(profile(5000))
     later.write_bytes(profile(10200))
     subprocess.run(["./tests/test_carbon",str(first),str(later)],check=True)
+    subprocess.run(["./tests/test_carbon_edit",str(later)],check=True)
 print("PASS: synthetic 20CM/JDLZ Carbon Cash read + fail-closed validation")
