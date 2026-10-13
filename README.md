@@ -1,8 +1,10 @@
 # NFS Save Lab NX
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/cca7e0d3-93f6-459f-b33b-841e46ce62a5" />
 
 **Nintendo Switch homebrew save editor** for the fan-made Switch ports of **Need for Speed: Most Wanted (2005)**, **Underground 2**, and **Carbon**.
 
 **Current version: v0.16** · Tested on a real Nintendo Switch with all three games.
+
 
 [🇺🇦 Українська](README_UA.md) · [🇬🇧 English](README.md) · [🇷🇺 Русский](README_RU.md)
 
@@ -25,6 +27,9 @@ This utility targets the **specific community Switch ports** of the games, not t
 - Verify the correct game-specific integrity data (MC02 MD5/EA CRC32 for Most Wanted; three HMAC-SHA1 signatures for the Original Xbox games).
 - **Create a verified `.nfslab.bakN` backup before modifying a save**, verify the output and provide recovery paths.
 - One `.nro` with pixel-art artwork and Homebrew Menu icon in the **full HD release package**.
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/550ffebc-4ad2-4e0b-ac69-7c2aa9cf9667" />
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/65fff7ed-3711-4022-a969-7a829deb1d7e" />
+<img width="1280" height="720" alt="image" src="https://github.com/user-attachments/assets/752e203b-6b3f-4ac0-aefb-df88e6644d9c" />
 
 ## Install and use
 
