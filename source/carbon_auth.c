@@ -178,6 +178,65 @@ int carbon_auth_verify_file(const char *save_path,const char *xbe_path){
  memset(title,0,sizeof(title));
  return r;
 }
+/* Exact observed authentic Carbon saves use ZERO HMAC key and the
+ * two header-provided lengths, NOT the title-specific XBE HMAC and fixed
+ * Xbox Most Wanted 0x08-byte first segment used for the old hypothesis.
+ * Verify and write three tags in dependency order: header1, payload2,
+ * then final-header3 (covering newly written header1/2). */
+static int carbon_port_layout(const unsigned char *p,size_t n,
+                              size_t *s1,size_t *s2){
+ if(!valid(p,n))return -1;
+ uint32_t a=le32(p+8),b=le32(p+12);
+ if(a!=16u||b!=0x40000u||
+    (uint64_t)0x4cu+(uint64_t)a+(uint64_t)b!=(uint64_t)n)return -1;
+ *s1=0x4c+(size_t)a;*s2=*s1+(size_t)b;return 0;
+}
+int carbon_auth_verify_switch_buffer(const unsigned char *save,size_t n,
+                                     unsigned *matched_tag_mask){
+ if(matched_tag_mask)*matched_tag_mask=0;
+ size_t s1=0,s2=0;
+ if(!save||!matched_tag_mask||carbon_port_layout(save,n,&s1,&s2))return -1;
+ static const unsigned char key[16]={0};
+ unsigned mask=0;
+ for(unsigned i=0;i<3;i++){
+  const size_t lo=i==0?0x4c:i==1?s1:0;
+  const size_t hi=i==0?s1:i==1?s2:0x38;
+  const size_t tagoff=i==0?0x10:i==1?0x24:0x38;
+  unsigned char hash[20];hmac_sha1(key,16,save+lo,hi-lo,hash);
+  unsigned dif=0;for(unsigned j=0;j<20;j++)dif|=(unsigned)(hash[j]^save[tagoff+j]);
+  if(!dif)mask|=1u<<i;
+ }
+ *matched_tag_mask=mask;
+ return mask==7u?0:-3;
+}
+int carbon_auth_sign_switch_buffer(unsigned char *save,size_t n){
+ size_t s1=0,s2=0;
+ if(!save||carbon_port_layout(save,n,&s1,&s2))return -1;
+ static const unsigned char key[16]={0};
+ for(unsigned i=0;i<3;i++){
+  const size_t lo=i==0?0x4c:i==1?s1:0;
+  const size_t hi=i==0?s1:i==1?s2:0x38;
+  const size_t off=i==0?0x10:i==1?0x24:0x38;
+  unsigned char hash[20];hmac_sha1(key,16,save+lo,hi-lo,hash);
+  memcpy(save+off,hash,20);
+ }
+ unsigned mask=0;
+ return carbon_auth_verify_switch_buffer(save,n,&mask);
+}
+int carbon_auth_verify_switch_file(const char *save_path,unsigned *matched_tag_mask){
+ if(!matched_tag_mask)return -1;
+ *matched_tag_mask=0;
+ unsigned char *buf=(unsigned char*)malloc(CARBON_FILE_SIZE);
+ if(!buf)return -4;
+ FILE *f=save_path?fopen(save_path,"rb"):NULL;
+ if(!f){free(buf);return -5;}
+ size_t len=fread(buf,1,CARBON_FILE_SIZE,f);
+ int extra=fgetc(f),err=ferror(f),closed=fclose(f);
+ int r=(len!=CARBON_FILE_SIZE||extra!=EOF||err||closed)?-1:
+        carbon_auth_verify_switch_buffer(buf,len,matched_tag_mask);
+ memset(buf,0,CARBON_FILE_SIZE);free(buf);return r;
+}
+
 const char *carbon_auth_error(int r){
  switch(r){
  case 0:return "ALL 3 XBOX HMAC MATCH";
