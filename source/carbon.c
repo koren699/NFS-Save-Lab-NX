@@ -155,7 +155,7 @@ static int make_cash_candidate(const unsigned char *input,size_t len,
  if(check!=old_cash)return -11;
  if(check==new_cash)return -12;
  const size_t base=0x34bc0u;
- const size_t frame=0x34ba0u;
+ const size_t frame=0x34ba8u;
  if(memcmp(input+frame,"\x22\x11\x44\x55",4)||
     le32(input+frame+4)!=32768u)return -13;
  size_t prevlen=le32(input+base+12);
