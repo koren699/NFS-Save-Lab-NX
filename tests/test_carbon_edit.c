@@ -23,9 +23,11 @@ int main(int argc,char **argv){
  assert(carbon_apply_cash(original,10200,200000,backup,sizeof(backup))==0);
  assert(carbon_read_cash(original,&cash)==0 && cash==200000);
  assert(carbon_read_cash(backup,&cash)==0 && cash==10200);
+ char actual_backup[1024];
+ snprintf(actual_backup,sizeof(actual_backup),"%s",backup);
  assert(carbon_apply_cash(original,10200,300000,backup,sizeof(backup))==-11);
  assert(carbon_read_cash(original,&cash)==0 && cash==200000);
- assert(remove(backup)==0);
+ assert(remove(actual_backup)==0);
  puts("PASS: Carbon correctly signed 100000/200000 cash, verified original backup, stable save editing");
  return 0;
 }
