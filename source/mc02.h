@@ -11,6 +11,9 @@ int mc02_verify(const unsigned char *buf,size_t len,uint32_t *cash);
 int mc02_build(const unsigned char *input,size_t len,uint32_t expected_cash,
                uint32_t desired_cash,unsigned char *output);
 int mc02_read_cash(const char *path,uint32_t *cash);
+/* Research-only Bounty reader: find the uniquely marked 12-byte record.
+   Supports exactly one validated 62688-byte Most Wanted MC02 profile. */
+int mc02_read_bounty(const char *path,uint32_t *bounty,uint32_t *offset);
 /* Creates .nfslab.bakN first and makes an atomic-ish replacement.
    Preserve any .mc02.oldpart if restore fails. */
 int mc02_apply_cash(const char *path,uint32_t expected_cash,uint32_t desired_cash,
