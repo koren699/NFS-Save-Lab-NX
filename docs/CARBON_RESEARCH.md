@@ -1,5 +1,20 @@
 # NFS Carbon (original Xbox -> Nintendo Switch, nfsc-sw) save research
 
+## Original-Xbox HMAC hypothesis and verification implementation — v0.14 (2026-10-13)
+
+Major reversal of prior assumption: raw Original Xbox Carbon save `20CM` at `0x10..0x4B` contains **60 bytes**, matching **three 20-byte HMAC-SHA1 tags** at offsets `0x10`, `0x24`, `0x38`. Our previous interpretation as three EA CRC32 values (at +0x10/+0x14/+0x18) incorrectly splits the first HMAC digest. This exact 3-tag signing pattern is documented in a *working Original Xbox Most Wanted* save editor by [focanmess/NFSMW_Xbox_Save](https://github.com/focanmess/NFSMW_Xbox_Save/blob/master/nfsmw_xbox_save.py):
+
+- `HMAC_key = HMAC_SHA1(retail_XBE_key, title_signature_key)[:16]`
+- `0x10:0x24 = HMAC_SHA1(HMAC_key, save[0x4C:0x54])`
+- `0x24:0x38 = HMAC_SHA1(HMAC_key, save[0x54:EOF])`
+- `0x38:0x4C = HMAC_SHA1(HMAC_key, save[0:0x38])`
+
+**NOT PROVEN FOR CARBON YET.** The key is game-specific and the original-Xbox Most Wanted key does *not* validate either authentic Carbon save. The user's own installed `default.xbe` under `sdmc:/switch/nfscx/game/default.xbe` contains the 16-byte title signature key in its XBE certificate at `(LE32(xbe+0x118) - LE32(xbe+0x104)) + 0xC0`. Validate certificate `title_id == 0x4541009e` before deriving. The loader already requires `default.xbe`, so there is no reason to ask the user to upload copyrighted game binaries or reveal key values.
+
+v0.14 `source/carbon_auth.c` provides independent SHA1, HMAC, certificate loading, secure local key derivation, and checks **all three tags** from the original save. Host test `tests/test_carbon_auth.c` matches fixed independent Python-derived digests for a synthetic `20CM` and detects tampering, plus validates extraction of a mock XBE. The homebrew Carbon career UI now shows `HMAC 1 / 2 / 3: MATCH` *only* if authentic user's save matches all three, or a precise error otherwise. It cannot alter or overwrite saves.
+
+**Next gate:** user runs v0.14 on the Switch with actual original `ALIAS_KOREN69` and `default.xbe`, reports whether the signatures match. If yes, implement compact JDLZ encoder + regenerate all three HMACs on a separate **test copy**, then game-validate **unchanged-cash** re-encoded candidate before testing changed money. Only after proven acceptance, enable game-save editing with backups. If no match, investigate additional title signing transforms / account-derived keys before any new write.
+
 ## Compact JDLZ A/B in-game result — A fails despite unchanged money (2026-10-13)
 
 **User hardware report:** The compactly re-encoded diagnostic **A_CASH_UNCHANGED_10200** (unchanged uncompressed career data, new compressed byte stream) was **rejected by Carbon as "corrupted"**. Diagnostic B (100,000) should NOT be attempted while A fails. This invalidates the hypothesis that simply reducing the compressed size to ~3.6 KB is sufficient.
