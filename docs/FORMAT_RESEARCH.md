@@ -6,9 +6,25 @@
 - [focanmess/NFSMW_Xbox_Save](https://github.com/focanmess/NFSMW_Xbox_Save) handles the **original Xbox version**, including specific HMAC-SHA1/MD5 fields, and requires a fixed file size. Its layout and signature algorithms are **not validated for Xbox 360**.
 - Community tools targeting the PC edition report different structure and hashes; do **not** copy offsets across platforms without samples.
 
+## New result — validated single Xbox 360 recompilation profile (2026-10-13)
+
+A single privately supplied **62688-byte (0xF4E0)** MC02 save was inspected **read-only**. The private file itself has **not been uploaded to this public repository**. The in-game values associated with it were Cash=900 and displayed Bounty=31550.
+
+- Format starts with ASCII `MC02`. File length at offset `0x04` is big-endian `0xF4E0`.
+- **EA CRC #1** at `0x10` equals EA's non-reflected CRC32 of `[0x1C,0x24)`.
+- **EA CRC #2** at `0x14` equals EA CRC32 of `[0x24,EOF)` (includes the trailing MD5).
+- **EA CRC #3** at `0x18` equals EA CRC32 of `[0x00,0x18)` (covers the first two stored CRCs).
+- **MD5** at the last 16 bytes equals `MD5([0x34,EOF-16))`.
+- All **four stored digests/checksums matched independently recomputed values** for the supplied save. This establishes their verification layout on this sample only, not whether the game accepts a modified copy.
+- A unique exact **u32 big-endian 900** is at byte offset `0x4039`: **strong Cash candidate**, not yet independently confirmed by a before/after pair.
+- Exact **float32 big-endian 31550** matches at `0x010E`, but no u32 representation matches. **Ambiguous Bounty candidate** only: it might be another game statistic.
+- Do **not** enable writing based solely on these matches. Validate with independent, controlled before/after samples, recalculate checksums in correct dependency order, and conduct a gameplay load test on a disposable profile.
+
+The older Xbox Original tool's HMAC-SHA1 save signing scheme is *not* the verified layout above. The sample uses the MC02/EA CRC32/MD5 layout; the same CRC variant appears in EA's published community reverse engineering notes. Other game ports may use different formats.
+
 ## Not established
 - Actual Xbox 360 file internals (record IDs, compression/encryption, money/bounty/heat mapping).
-- Exact checksum/signature algorithm(s) for the Xbox 360 port's playable profile.
+- Confirmed successful game-side validation of newly recomputed checksums after any modified field; so far only existing hashes were verified on one untouched file.
 - Whether Heat Level is stored directly in the same save, per car, or in a derived field.
 - Compatibility across MW, U2, and Carbon ports.
 
