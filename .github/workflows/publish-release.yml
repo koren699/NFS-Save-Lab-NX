@@ -16,45 +16,54 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify full HD release assets
+
+      - name: Verify tested Full HD NRO
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          test "$VERSION" = "v0.16" || { echo "No validated assets for $VERSION"; exit 1; }
-          test -s "release-assets/v0.16/nfs_save_lab_nx.nro" || {
-            echo "Missing Full HD NRO. Attach the validated binary to release-assets/v0.16 first."
+          test "$VERSION" = "v0.16" || { echo "This workflow is configured only for v0.16."; exit 1; }
+          test -s release-assets/v0.16/nfs_save_lab_nx.nro || {
+            echo "Missing the NRO in release-assets/v0.16/. Upload the FULL HD NRO first."
             exit 1
           }
           python3 - <<'PY'
-          import struct
           from pathlib import Path
+          import struct
           p=Path("release-assets/v0.16/nfs_save_lab_nx.nro")
           b=p.read_bytes()
-          assert b[16:20] == b"NRO0", "Not a Switch NRO"
-          assert len(b)>800000, "Suspiciously small release binary"
+          assert b[16:20] == b"NRO0", "Invalid Nintendo Switch NRO"
+          assert len(b)>800000, "NRO too small for the embedded HD artwork"
           magic,version,w,h,length=struct.unpack_from("<8sIHHI",b,len(b)-20)
-          assert (magic,version,w,h,length)==(b"NFSLABP8",1,336,360,725760), "No full-HD posters"
+          assert (magic,version,w,h,length)==(b"NFSLABP8",1,336,360,725760), "Full HD posters are missing"
           off=struct.unpack_from("<I",b,0x18)[0]
-          magic,vers,io,il,no,nl,ro,rl=struct.unpack_from("<IIQQQQQQ",b,off)
-          assert magic==0x54455341 and vers==0 and nl==16384
-          assert b[off+io:off+io+2]==bytes([0xff,0xd8]), "Pixel HBMenu icon missing"
-          print(f"Ready for publishing: {p} ({len(b)} bytes)")
+          aset,ver,io,il,no,nl,ro,rl=struct.unpack_from("<IIQQQQQQ",b,off)
+          assert aset==0x54455341 and ver==0 and nl==16384, "Bad icon/NACP header"
+          assert b[off+io:off+io+2]==bytes([0xff,0xd8]), "Custom JPEG Homebrew Menu icon missing"
+          assert b"0.16.0" in b[off+no:off+no+nl] or b"0.16.0" in b, "Wrong app version"
+          print("Verified full HD v0.16, app icon, all 3 posters:",len(b),"bytes")
           PY
-      - name: Build release ZIP
+
+      - name: Verify screenshot gallery
         run: |
+          set -euo pipefail
+          for screenshot in \
+            docs/screenshots/01-main-menu.jpg \
+            docs/screenshots/02-most-wanted-save-list.jpg \
+            docs/screenshots/03-underground-2-profiles.jpg \
+            docs/screenshots/04-carbon-cash.jpg
+          do
+            test -s "$screenshot" || { echo "Missing screenshot: $screenshot"; exit 1; }
+          done
+
+      - name: Package binaries and three-language release notes
+        run: |
+          set -euo pipefail
           mkdir -p dist
           cp release-assets/v0.16/nfs_save_lab_nx.nro dist/nfs_save_lab_nx.nro
-          (cd dist && zip -9 "NFS_Save_Lab_NX_v0.16_Full_HD.zip" nfs_save_lab_nx.nro)
-      - name: Prepare release description with screenshot
-        env:
-          VERSION: ${{ inputs.version }}
-          REPO: ${{ github.repository }}
-        run: |
+          (cd dist && zip -9 NFS_Save_Lab_NX_v0.16_Full_HD.zip nfs_save_lab_nx.nro)
           cp docs/RELEASE_NOTES_v0.16.md dist/release-notes.md
-          if [ -f release-assets/v0.16/screenshot.png ]; then
-            printf '\n\n### Preview / Скріншот / Скриншот\n\n![NFS Save Lab NX interface](https://github.com/%s/releases/download/%s/screenshot.png)\n' "$REPO" "$VERSION" >> dist/release-notes.md
-          fi
+
       - name: Publish or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,14 +71,20 @@ jobs:
         run: |
           set -euo pipefail
           TITLE="NFS Save Lab NX ${VERSION} — Most Wanted / Underground 2 / Carbon"
+          ASSETS=(
+            dist/nfs_save_lab_nx.nro
+            dist/NFS_Save_Lab_NX_v0.16_Full_HD.zip
+            docs/screenshots/01-main-menu.jpg
+            docs/screenshots/02-most-wanted-save-list.jpg
+            docs/screenshots/03-underground-2-profiles.jpg
+            docs/screenshots/04-carbon-cash.jpg
+          )
           if gh release view "$VERSION" >/dev/null 2>&1; then
-            gh release edit "$VERSION" --title "$TITLE" --notes-file dist/release-notes.md
-            gh release upload "$VERSION" dist/nfs_save_lab_nx.nro dist/NFS_Save_Lab_NX_v0.16_Full_HD.zip --clobber
+            gh release edit "$VERSION" --title "$TITLE" --notes-file dist/release-notes.md --latest
+            gh release upload "$VERSION" "${ASSETS[@]}" --clobber
           else
-            gh release create "$VERSION" dist/nfs_save_lab_nx.nro dist/NFS_Save_Lab_NX_v0.16_Full_HD.zip \
-              --target "${GITHUB_SHA}" --title "$TITLE" --notes-file dist/release-notes.md --latest
-          fi
-          if [ -f release-assets/v0.16/screenshot.png ]; then
-            gh release upload "$VERSION" release-assets/v0.16/screenshot.png --clobber
+            gh release create "$VERSION" "${ASSETS[@]}" \
+              --target "${GITHUB_SHA}" --title "$TITLE" \
+              --notes-file dist/release-notes.md --latest
           fi
           gh release view "$VERSION" --json url --jq .url
