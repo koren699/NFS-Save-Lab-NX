@@ -10,6 +10,7 @@
 #include "backup.h"
 #include "diagnostics.h"
 #include "mc02.h"
+#include "carbon.h"
 #include "poster_embedded.h"
 #include "font8x8_basic.h"
 
@@ -56,6 +57,8 @@ static uint32_t bounty_detected=0,bounty_offset=0;
 static Mc02BountyInfo bounty_info;
 static unsigned bounty_selected=0;
 static int bounty_write_error=0;
+static int carbon_cash_error=0;
+static uint32_t carbon_cash_value=0;
 static char status_line[190]="READY TO SCAN LOCAL SAVES";
 static Framebuffer fb;
 static uint32_t *pixels;
@@ -194,7 +197,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.10.0",WHITE);
+ txt(980,42,2,"BUILD 0.11.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -213,7 +216,8 @@ static void big_number(int x,int y,const char *s){
 }
 static void footer(const char *shortline){
  label(67,648,shortline);
- label(67,685,"MOST WANTED: CASH + BOUNTY MC02    /    HEAT: READ ONLY");
+ label(67,685,game==2?"CARBON: CASH INFO ONLY / EDITOR LOCKED":
+      "MOST WANTED: CASH + BOUNTY MC02    /    HEAT: READ ONLY");
 }
 static void game_card(int idx,int x,int y){
  int active=(game==idx),w=356,h=426;
@@ -310,8 +314,9 @@ static void action_page(void){
   int y=273+i*39,sel=i==action;
   if(sel){rect(78,y-5,725,36,COLOR(43,64,63));rect(78,y-5,5,36,accent);}
   char text[85];snprintf(text,sizeof(text),"%02d   %s",i+1,entries[i]);
+  if(i==3 && game==2)snprintf(text,sizeof(text),"04   CARBON CASH INFO");
   txt(94,y,2,text,sel?WHITE:MUTED);
-  cliptext(461,y,2,notes[i],sel?accent:MUTED,19);
+  cliptext(461,y,2,i==3&&game==2?"20CM / JDLZ / READ ONLY":notes[i],sel?accent:MUTED,19);
  }
  footer("UP / DOWN  TOOL       A  OPEN       B  FILES");
 }
@@ -570,6 +575,21 @@ static void bounty_result_page(void){
  }else label(91,467,"CHECK ORIGINAL / BACKUP BEFORE RETRYING");
  footer("B  BACK TO TOOL MENU");
 }
+static void carbon_cash_info_page(void){
+ header("03 / CARBON CASH ANALYSIS");
+ info_panel("CARBON CAREER BALANCE","ORIGINAL XBOX 20CM / JDLZ DECODED");
+ if(carbon_cash_error){
+  txt(90,317,2,carbon_error(carbon_cash_error),RED);
+  label(90,382,"CASH NOT READ FROM THIS FILE");
+ }else{
+  char cash[32];snprintf(cash,sizeof(cash),"%09u",carbon_cash_value);
+  txt(89,289,2,"DECOMPRESSED CASH:",MUTED);
+  big_number(90,351,cash);
+  label(90,439,"SOURCE: TABLE ENTRY 2287685084 / FIELD 7");
+  label(90,492,"READ ONLY UNTIL HASH + JDLZ WRITER VERIFIED");
+ }
+ footer("B  BACK TO TOOL MENU    /    NO CARBON WRITES");
+}
 static void draw(void){
  uint32_t stride;
  pixels=(uint32_t*)framebufferBegin(&fb,&stride);
@@ -589,7 +609,8 @@ static void draw(void){
  case 18:bounty_view_page();break;
  case 19:bounty_edit_page();break;
  case 20:bounty_confirm_page();break;
- case 21:bounty_result_page();break;}
+ case 21:bounty_result_page();break;
+ case 22:carbon_cash_info_page();break;}
  if(status_line[0]){
   rect(64,605,1150,23,COLOR(36,45,50));
   cliptext(73,609,2,status_line,WHITE,68);
@@ -686,6 +707,9 @@ static void handle(u64 key,u64 held){
      old_val=bounty_info.total;new_val=old_val;
      digit=4;screen=19;
     }
+   }else if(action==3 && game==2){
+    carbon_cash_error=carbon_read_cash(files[selected].path,&carbon_cash_value);
+    screen=22;
    }else if(action==3||action==4){
     metric=action==3?0:2;
     old_val=metric==2?1:0;digit=4;screen=2;
@@ -803,6 +827,7 @@ static void handle(u64 key,u64 held){
    }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR THEN PRESS A");
   }
  }else if(screen==21&&key&HidNpadButton_B)screen=7;
+ else if(screen==22&&key&HidNpadButton_B)screen=7;
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
