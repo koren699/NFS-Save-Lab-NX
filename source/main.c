@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include "engine.h"
 #include "backup.h"
+#include "diagnostics.h"
 #include "font8x8_basic.h"
 
 #define SW 1280
@@ -41,6 +42,8 @@ static const char *metric_names[]={"CASH","BOUNTY","HEAT LEVEL"};
 static char restore_paths[64][1024];
 static uint32_t old_val=0,new_val=9999999;
 static LabMatches matches;
+static LabDiff diff_result;
+static int diff_error=0;
 static int scan_err=0,patch_err=0;
 static char backup_path[1024]={0};
 static int backup_error=0;
@@ -103,7 +106,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.3.0",WHITE);
+ txt(980,42,2,"BUILD 0.4.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -122,7 +125,7 @@ static void big_number(int x,int y,const char *s){
 }
 static void footer(const char *shortline){
  label(67,648,shortline);
- label(67,685,"CLOSE THE GAME BEFORE EDITING  /  SAVE CHECKSUMS NOT VERIFIED");
+ label(67,685,"READ-ONLY ANALYSIS  /  ORIGINAL SAVES ARE NEVER PATCHED");
 }
 static void game_card(int idx,int x,int y){
  int active=game==idx,w=360,h=355;
@@ -160,9 +163,9 @@ static void info_panel(const char *heading,const char *subtitle){
  txt(862,284,2,game_names[game],accent);
  label(862,331,"CURRENT VALUE");
  char b[50];snprintf(b,sizeof(b),"%09u",old_val);txt(862,362,3,b,WHITE);
- label(862,416,"PATCH MODE");
- pill(862,451,"EXPERIMENTAL",COLOR(245,178,72));
- label(862,520,"BACKUP: AUTO ON WRITE");
+ label(862,416,"ANALYSIS MODE");
+ pill(862,451,"READ ONLY",accent);
+ label(862,520,"NO RAW SAVE WRITES");
 }
 static void files_page(void){
  header("01 / LOCAL SAVE FILES");
@@ -180,18 +183,18 @@ static void files_page(void){
  footer("UP / DOWN  SELECT       A  CONTINUE       B  BACK");
 }
 static void action_page(void){
- header("02 / MODIFY OR PROTECT SAVE");
- info_panel("CHOOSE AN ACTION","SELECT A METRIC OR BACKUP OPERATION");
- const char *entries[]={"CASH","BOUNTY","HEAT LEVEL","CREATE BACKUP","RESTORE BACKUP"};
- const char *notes[]={"IN-GAME MONEY","CHASE REWARD POINTS","CHASE POLICE HEAT (1 - 5)","KEEP ORIGINAL SNAPSHOT","RESTORE A PREVIOUS SNAPSHOT"};
- for(int i=0;i<5;i++){
-  int y=284+i*58,sel=i==action;
-  if(sel){rect(78,y-10,725,52,COLOR(43,64,63));rect(78,y-10,5,52,accent);}
-  char s[75];snprintf(s,sizeof(s),"0%d   %s",i+1,entries[i]);
-  txt(96,y,2,s,sel?WHITE:MUTED);
-  cliptext(435,y,2,notes[i],sel?accent:MUTED,22);
+ header("02 / SAVE TOOLS");
+ info_panel("CHOOSE A TOOL","READ-ONLY DIAGNOSTICS AND SAFE BACKUPS");
+ const char *entries[]={"CASH SCAN","BOUNTY SCAN","HEAT SCAN","COMPARE SNAPSHOTS","CREATE BACKUP","RESTORE BACKUP"};
+ const char *notes[]={"LOCATE NUMBER MATCHES","LOCATE REWARD MATCHES","ANALYZE 1 - 5","COMPARE TWO SAVE VERSIONS","COPY ORIGINAL TO .BAK","RESTORE VERIFIED SNAPSHOT"};
+ for(int i=0;i<6;i++){
+  int y=282+i*50,sel=i==action;
+  if(sel){rect(78,y-9,725,44,COLOR(43,64,63));rect(78,y-9,5,44,accent);}
+  char text[75];snprintf(text,sizeof(text),"%02d   %s",i+1,entries[i]);
+  txt(94,y,2,text,sel?WHITE:MUTED);
+  cliptext(431,y,2,notes[i],sel?accent:MUTED,22);
  }
- footer("UP / DOWN  SELECT       A  OPEN       B  FILES");
+ footer("UP / DOWN  TOOL       A  OPEN       B  FILES");
 }
 static void load_backups(void) {
  restore_count=0;restore_index=0;
@@ -262,8 +265,8 @@ static void value_page(int next){
   label(89,422,"UP / DOWN  SELECT LEVEL 1 - 5");
   label(89,456,"ONLY 1 MATCH MAY BE EDITED IN HEAT MODE");
  }
- label(89,509,next?"A  REVIEW CHANGE":"A  SCAN FOR CURRENT VALUE");
- footer(next?"A  REVIEW       B  BACK":"A  SCAN       B  BACK");
+ label(89,509,"A  SCAN FOR NUMBER - READ ONLY");
+ footer("A  SCAN CURRENT NUMBER       B  BACK");
 }
 static void matches_page(void){
  header("03 / MATCHES");
@@ -280,30 +283,66 @@ static void matches_page(void){
   char b[85];snprintf(b,sizeof(b),"%02d / 0x%08X  / %s",i+1,matches.items[i].offset,matches.items[i].be?"BIG ENDIAN":"LITTLE ENDIAN");
   txt(93,y,2,b,i==match_idx?WHITE:MUTED);
  }
- footer(matches.overflow?"TOO MANY MATCHES  /  WRITING DISABLED":
-       metric==2&&matches.count!=1?"HEAT NEEDS EXACTLY ONE MATCH  /  WRITE BLOCKED":
-       "UP / DOWN  OFFSET       A  EDIT       B  BACK");
+ footer("READ ONLY. MATCH IS NOT VERIFIED CASH / BOUNTY / HEAT.    B  BACK");
 }
-static void review_page(void){
- header("05 / SAFETY CHECK");
- info_panel("CONFIRM CHANGE","VERIFY THE FILE AND AMOUNTS BEFORE WRITING");
- char b[140];
- snprintf(b,sizeof(b),"%s",metric_names[metric]);txt(95,279,2,b,WHITE);
- snprintf(b,sizeof(b),"CURRENT   %09u",old_val);txt(95,324,3,b,MUTED);
- snprintf(b,sizeof(b),"NEW       %09u",new_val);txt(95,381,3,b,accent);
- snprintf(b,sizeof(b),"OFFSET 0x%08X / %s",matches.items[match_idx].offset,matches.items[match_idx].be?"BE":"LE");
- txt(95,437,2,b,WHITE);
- txt(95,485,2,"GAME SAVE MAY FAIL CHECKSUM VALIDATION",RED);
- txt(95,523,2,"HOLD ZL + ZR, THEN PRESS A TO WRITE",WHITE);
- footer("ZL + ZR + A  WRITE AND BACKUP ORIGINAL       B  CANCEL");
+static void compare_pick_page(void){
+ header("03 / PAIR COMPARISON");
+ info_panel("SELECT BEFORE SAVE","A KNOWN EARLIER SNAPSHOT OF THIS FILE");
+ txt(90,274,2,"METRIC:",MUTED);
+ txt(228,274,2,metric_names[metric],accent);
+ label(90,316,"L / R SWITCH BETWEEN CASH, BOUNTY, HEAT");
+ if(!restore_count)txt(92,370,2,"NO .NFSLAB.BAK SNAPSHOTS FOUND",RED);
+ int start=restore_index-2;if(start<0)start=0;
+ if(start>restore_count-5)start=restore_count-5;if(start<0)start=0;
+ for(int i=start;i<restore_count && i<start+5;i++){
+  int y=364+(i-start)*44,active=i==restore_index;
+  if(active){rect(82,y-6,717,36,COLOR(44,64,61));rect(82,y-6,5,36,accent);}
+  char b[96];snprintf(b,sizeof(b),"BACKUP %02d    .nfslab.bak",i+1);
+  txt(96,y,2,b,active?WHITE:MUTED);
+ }
+ footer("L / R  METRIC     UP / DOWN  BACKUP     A  CONTINUE     B  BACK");
 }
-static void result_page(void){
- header("06 / WRITE RESULT");
- info_panel("OPERATION COMPLETE","RETURN TO BROWSER FOR ANOTHER SAVE");
- txt(91,321,3,patch_err?"WRITE FAILED":"BYTE PATCH WRITTEN",patch_err?RED:accent);
- if(patch_err){txt(91,373,2,lab_error(patch_err),RED);}
- else {label(91,385,"ORIGINAL COPIED TO .NFSLAB.BAKN");label(91,431,"NOT YET VERIFIED TO LOAD IN GAME");}
- footer("B  RETURN TO FILES");
+static void compare_value_page(int after){
+ header(after?"05 / CURRENT SNAPSHOT":"04 / EARLIER SNAPSHOT");
+ info_panel(after?"ENTER CURRENT VALUE":"ENTER EARLIER VALUE",
+  after?"VALUE DISPLAYED AFTER THE GAME CHANGED":"VALUE DISPLAYED BEFORE THE GAME CHANGED");
+ txt(93,271,2,metric_names[metric],accent);
+ uint32_t v=after?new_val:old_val;
+ char b[40];
+ if(metric==2)snprintf(b,sizeof(b),"%u / 5",v);
+ else snprintf(b,sizeof(b),"%09u",v);
+ big_number(93,326,b);
+ if(metric!=2){
+  int cursorx=93+(8-digit)*40;
+  rect(cursorx,382,37,5,accent);
+  label(90,424,"UP / DOWN  CHANGE DIGIT");
+  label(90,456,"LEFT / RIGHT  SELECT DIGIT");
+ } else label(90,424,"UP / DOWN  SELECT LEVEL 1 - 5");
+ label(90,518,after?"A  COMPARE FILES WITHOUT WRITING":"A  ENTER CURRENT VALUE");
+ footer(after?"A  ANALYZE     B  BACK":"A  NEXT     B  BACK");
+}
+static void comparison_result_page(void){
+ header("06 / DIAGNOSTIC RESULTS");
+ info_panel("FILE DIFFERENCES","READ-ONLY COMPARISON. NO SAVE MODIFICATIONS.");
+ if(diff_error){
+  txt(89,295,2,lab_diff_error(diff_error),RED);
+ }else{
+  char b[100];snprintf(b,sizeof(b),"DIFFERENT BYTES: %u",diff_result.changed_bytes);
+  txt(89,282,2,b,WHITE);
+  snprintf(b,sizeof(b),"CHANGED RANGES: %u",diff_result.changed_ranges);
+  txt(89,314,2,b,WHITE);
+  snprintf(b,sizeof(b),"NUMBER PAIRS: %d",diff_result.matches);
+  txt(89,349,2,b,accent);
+  if(diff_result.too_many_matches)label(89,384,"TOO MANY CANDIDATES - DISPLAY LIMITED");
+  int top=392;
+  for(int i=0;i<diff_result.matches&&i<5;i++){
+   snprintf(b,sizeof(b),"%02d  BYTE 0x%08X  %s",i+1,diff_result.entries[i].offset,
+    diff_result.entries[i].big_endian?"BIG ENDIAN":"LITTLE ENDIAN");
+   txt(89,top+i*37,2,b,MUTED);
+  }
+  if(diff_result.matches==0)label(89,401,"NO DIRECT 32-BIT NUMBER PAIR WAS FOUND");
+ }
+ footer("RESULTS ARE HYPOTHESES  /  B  BACK TO SNAPSHOTS");
 }
 static void draw(void){
  uint32_t stride;
@@ -314,9 +353,11 @@ static void draw(void){
  empty();
  switch(screen){case 0:dashboard();break;case 1:files_page();break;
  case 2:value_page(0);break;case 3:matches_page();break;
- case 4:value_page(1);break;case 5:review_page();break;case 6:result_page();break;
  case 7:action_page();break;case 8:backups_page();break;
- case 9:restore_confirm_page();break;case 10:backup_result_page();break;}
+ case 9:restore_confirm_page();break;case 10:backup_result_page();break;
+ case 11:compare_pick_page();break;
+ case 12:compare_value_page(0);break;case 13:compare_value_page(1);break;
+ case 14:comparison_result_page();break;}
  if(status_line[0]){
   rect(64,605,1150,23,COLOR(36,45,50));
   cliptext(73,609,2,status_line,WHITE,68);
@@ -357,66 +398,67 @@ static uint32_t change(uint32_t v,int sign,int digit_place){
  if(sign>0)return v>999999999-step?999999999:v+step;
  return v<step?0:v-step;
 }
+static void change_number(u64 key,uint32_t *v){
+ if(metric==2){
+  if(key&HidNpadButton_Up&&*v<5)(*v)++;
+  else if(key&HidNpadButton_Down&&*v>1)(*v)--;
+  return;
+ }
+ if(key&HidNpadButton_Left&&digit<8)digit++;
+ else if(key&HidNpadButton_Right&&digit>0)digit--;
+ else if(key&HidNpadButton_Up)*v=change(*v,1,digit);
+ else if(key&HidNpadButton_Down)*v=change(*v,-1,digit);
+}
 static void handle(u64 key,u64 held){
  if(screen==0){
   if(key&HidNpadButton_L)game=(game+2)%3;
   if(key&HidNpadButton_R)game=(game+1)%3;
   if(key&HidNpadButton_A){discover();screen=1;}
- } else if(screen==1){
+ }else if(screen==1){
   if(key&HidNpadButton_B)screen=0;
   else if(key&HidNpadButton_Up&&selected>0)selected--;
   else if(key&HidNpadButton_Down&&selected<nfiles-1)selected++;
-  else if(key&HidNpadButton_A&&nfiles){old_val=0;digit=4;action=0;screen=7;snprintf(status_line,sizeof(status_line),"SELECTED FILE: %.130s",files[selected].name);}
- } else if(screen==7){
+  else if(key&HidNpadButton_A&&nfiles){
+   old_val=0;new_val=0;digit=4;action=0;screen=7;
+   snprintf(status_line,sizeof(status_line),"SELECTED: %.130s",files[selected].name);
+  }
+ }else if(screen==7){
   if(key&HidNpadButton_B)screen=1;
   else if(key&HidNpadButton_Up&&action>0)action--;
-  else if(key&HidNpadButton_Down&&action<4)action++;
+  else if(key&HidNpadButton_Down&&action<5)action++;
   else if(key&HidNpadButton_A){
    if(action<3){
+    metric=action;old_val=metric==2?1:0;digit=4;screen=2;
+   }else if(action==3){
+    metric=0;load_backups();screen=11;
+   }else if(action==4){
     if(files[selected].backup){
-     snprintf(status_line,sizeof(status_line),"READ-ONLY PORT COPY / CHOOSE A LIVE FILE");return;
+     snprintf(status_line,sizeof(status_line),"CANNOT BACK UP PORT'S MIRROR AS A LIVE SAVE");
+    }else{
+     backup_result=0;
+     backup_error=lab_make_backup(files[selected].path,backup_path,sizeof(backup_path));
+     screen=10;
     }
-    metric=action;old_val=metric==2?1:0;new_val=metric==2?2:50000;digit=4;screen=2;
-   } else if(action==3) {
-    if(files[selected].backup){snprintf(status_line,sizeof(status_line),"CANNOT BACK UP A PORT MIRROR AS LIVE SAVE");return;}
-    backup_result=0;
-    backup_error=lab_make_backup(files[selected].path,backup_path,sizeof(backup_path));
-    screen=10;
-   } else {
-    if(files[selected].backup){snprintf(status_line,sizeof(status_line),"CHOOSE A LIVE SAVE TO RESTORE");return;}
-    load_backups();screen=8;
+   }else{
+    if(files[selected].backup){
+     snprintf(status_line,sizeof(status_line),"READ-ONLY MIRROR: RESTORE DISABLED");
+    }else{load_backups();screen=8;}
    }
   }
- } else if(screen==2||screen==4){
-  uint32_t *v=screen==2?&old_val:&new_val;
-  if(key&HidNpadButton_B)screen=screen==2?7:3;
+ }else if(screen==2){
+  if(key&HidNpadButton_B)screen=7;
   else if(key&HidNpadButton_A){
-   if(screen==2){scan_err=lab_scan(files[selected].path,old_val,&matches);match_idx=0;screen=3;snprintf(status_line,sizeof(status_line),"%d CANDIDATE BYTE MATCHES",matches.count);}
-   else screen=5;
-  } else if(metric==2) {
-   if(key&HidNpadButton_Up&&*v<5)(*v)++;
-   else if(key&HidNpadButton_Down&&*v>1)(*v)--;
-  } else if(key&HidNpadButton_Left&&digit<8)digit++;
-  else if(key&HidNpadButton_Right&&digit>0)digit--;
-  else if(key&HidNpadButton_Up)*v=change(*v,1,digit);
-  else if(key&HidNpadButton_Down)*v=change(*v,-1,digit);
- } else if(screen==3){
+   scan_err=lab_scan(files[selected].path,old_val,&matches);
+   match_idx=0;screen=3;
+   snprintf(status_line,sizeof(status_line),"SCAN COMPLETE: %d MATCHES. WRITE DISABLED.",matches.count);
+  }else change_number(key,&old_val);
+ }else if(screen==3){
   if(key&HidNpadButton_B)screen=2;
   else if(key&HidNpadButton_Up&&match_idx>0)match_idx--;
   else if(key&HidNpadButton_Down&&match_idx<matches.count-1)match_idx++;
-  else if(key&HidNpadButton_A&&!scan_err&&matches.count>0&&!matches.overflow&&!files[selected].backup&&
-          (metric!=2||matches.count==1)){digit=4;screen=4;}
-  else if(key&HidNpadButton_A&&files[selected].backup)snprintf(status_line,sizeof(status_line),"BACKUP COPY: CANNOT PATCH THIS FILE");
- } else if(screen==5){
-  if(key&HidNpadButton_B)screen=4;
-  else if(key&HidNpadButton_A){
-   if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
-    patch_err=lab_patch(files[selected].path,old_val,new_val,matches.items[match_idx],backup_path,sizeof(backup_path));screen=6;
-    snprintf(status_line,sizeof(status_line),patch_err?"WRITE FAILED / ORIGINAL SHOULD BE INTACT":"RAW BYTES PATCHED / SAVE INTEGRITY NOT VERIFIED");
-   }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR WHILE PRESSING A TO CONFIRM");
-  }
- }else if(screen==6&&key&HidNpadButton_B){screen=7;}
- else if(screen==8){
+  else if(key&HidNpadButton_A)snprintf(status_line,sizeof(status_line),
+            "WRITE DISABLED UNTIL FORMAT AND HASHES ARE VERIFIED");
+ }else if(screen==8){
   if(key&HidNpadButton_B)screen=7;
   else if(key&HidNpadButton_Up&&restore_index>0)restore_index--;
   else if(key&HidNpadButton_Down&&restore_index<restore_count-1)restore_index++;
@@ -425,13 +467,38 @@ static void handle(u64 key,u64 held){
   if(key&HidNpadButton_B)screen=8;
   else if(key&HidNpadButton_A){
    if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
-    backup_result=1;backup_error=lab_restore_backup(files[selected].path,
-      restore_paths[restore_index],backup_path,sizeof(backup_path));
-    screen=10;snprintf(status_line,sizeof(status_line),"RESTORE %s",
-      backup_error?"FAILED":"COMPLETE / CURRENT SAVE SAFETY COPY SAVED");
+    backup_result=1;
+    backup_error=lab_restore_backup(files[selected].path,
+        restore_paths[restore_index],backup_path,sizeof(backup_path));
+    screen=10;
+    snprintf(status_line,sizeof(status_line),backup_error?"RESTORE FAILED":"RESTORED VERIFIED COPY");
    }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR WHILE PRESSING A");
   }
- }else if(screen==10&&key&HidNpadButton_B)screen=7;
+ }else if(screen==10){
+  if(key&HidNpadButton_B)screen=7;
+ }else if(screen==11){
+  if(key&HidNpadButton_B)screen=7;
+  else if(key&HidNpadButton_L)metric=(metric+2)%3;
+  else if(key&HidNpadButton_R)metric=(metric+1)%3;
+  else if(key&HidNpadButton_Up&&restore_index>0)restore_index--;
+  else if(key&HidNpadButton_Down&&restore_index<restore_count-1)restore_index++;
+  else if(key&HidNpadButton_A&&restore_count>0){
+   old_val=metric==2?1:0;new_val=metric==2?2:0;digit=4;screen=12;
+  }
+ }else if(screen==12 || screen==13){
+  uint32_t *v=screen==12?&old_val:&new_val;
+  if(key&HidNpadButton_B)screen=screen==12?11:12;
+  else if(key&HidNpadButton_A){
+   if(screen==12){digit=4;screen=13;}
+   else{
+    diff_error=lab_diff_values(restore_paths[restore_index],
+       files[selected].path,old_val,new_val,&diff_result);
+    screen=14;
+    snprintf(status_line,sizeof(status_line),
+       "READ-ONLY COMPARISON COMPLETE / %u CHANGED BYTES",diff_result.changed_bytes);
+   }
+  }else change_number(key,v);
+ }else if(screen==14&&key&HidNpadButton_B)screen=11;
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
