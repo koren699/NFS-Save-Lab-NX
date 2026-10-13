@@ -1,5 +1,18 @@
 # NFS Carbon (original Xbox -> Nintendo Switch, nfsc-sw) save research
 
+## Compact JDLZ A/B in-game result — A fails despite unchanged money (2026-10-13)
+
+**User hardware report:** The compactly re-encoded diagnostic **A_CASH_UNCHANGED_10200** (unchanged uncompressed career data, new compressed byte stream) was **rejected by Carbon as "corrupted"**. Diagnostic B (100,000) should NOT be attempted while A fails. This invalidates the hypothesis that simply reducing the compressed size to ~3.6 KB is sufficient.
+
+A local byte-level comparison of the actual user original 10,200 profile with the exact A delivered in the conversation shows:
+- Original JDLZ compressed length 3,269 (0xCC5); A compressed length 3,599 (0xE0F). Source and candidate both 262,236 bytes.
+- A changes exactly 3,457 bytes. Besides the JDLZ payload, the changed length fields are at `0x4C`, `0x34BB0`, `0x34BCC`.
+- The 12 header bytes at `0x10/0x14/0x18` and the 48-byte opaque block `0x1C..0x4B` remain IDENTICAL between original and test A, despite changed compressed data.
+- By contrast, between the two independently *game-created* original Carbon profiles ($5,000 and $10,200), **all three** values at 0x10/0x14/0x18, as well as the entire opaque 0x1C..0x4B block, change along with the save. This is strong evidence that wrapper authentication/integrity may have to be rebuilt, but not proof; format-specific decompressor compatibility remains an alternative.
+- The existing publicly available PC/Xbox360 save editor (`TheLastOfLogic/NFS-Carbon-Save-Editor`) handles different wrapper/platform conditions and its CRC code does NOT reproduce the three 0x10/0x14/0x18 values from either authentic user Original Xbox 20CM save under the documented ranges. **Do not write guessed CRCs into the active profile.**
+
+**Plan:** retain original files and run all further tests off-device; locate Original Xbox-specific authentication routine in statically recompiled game/port or find a demonstrated working Original Xbox-save fix tool; prove checksum/signature regeneration against BOTH authentic native saves before asking for another game load. In the meantime keep v0.12 Cash INFO and previously verified Most Wanted features; Carbon v0.13.* is experimental and should not be considered a stable editor.
+
 ## Failed in-game test of v0.13.1 and alternative compact JDLZ diagnostics (2026-10-13)
 
 The user attempted to load the v0.13.1 experimental test copy. **Carbon reported the save was corrupted and refused to load it.** This is a concrete failed in-game test; v0.13.1's ability to read its own output is NOT proof of a game-compatible save. The live original was not modified by the homebrew test-copy operation. Keep all direct Carbon writes disabled; do not promote the test-copy writer to a stable editor.
