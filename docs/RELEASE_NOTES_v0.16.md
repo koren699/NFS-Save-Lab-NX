@@ -6,22 +6,22 @@
 
 ## Screenshots / Скриншоти / Скриншоты
 
-![NFS Save Lab NX v0.16 — pixel-art selection menu for all three supported Need for Speed games](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/01-main-menu.jpg)
+![NFS Save Lab NX v0.16 — pixel-art selection menu for all three supported Need for Speed games](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/01-main-menu.jpg)
 
 <details>
 <summary>View 3 more screenshots · Ще 3 скриншоти · Ещё 3 скриншота</summary>
 
 **Most Wanted — save browser / вибір збереження / выбор сохранения**
 
-![Most Wanted — NFS Save Lab NX save browser](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/02-most-wanted-save-list.jpg)
+![Most Wanted — NFS Save Lab NX save browser](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/02-most-wanted-save-list.jpg)
 
 **Underground 2 — career selection / вибір кар'єри / выбор карьеры**
 
-![Underground 2 — NFS Save Lab NX career selection](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/03-underground-2-profiles.jpg)
+![Underground 2 — NFS Save Lab NX career selection](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/03-underground-2-profiles.jpg)
 
 **Carbon — Cash editor and verified signatures / гроші та перевірка підписів**
 
-![Carbon — NFS Save Lab NX cash balance and Xbox HMAC verification](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/04-carbon-cash.jpg)
+![Carbon — NFS Save Lab NX cash balance and Xbox HMAC verification](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/04-carbon-cash.jpg)
 
 </details>
 
