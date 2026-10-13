@@ -202,7 +202,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.14.0",WHITE);
+ txt(980,42,2,"BUILD 0.15.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -221,7 +221,7 @@ static void big_number(int x,int y,const char *s){
 }
 static void footer(const char *shortline){
  label(67,648,shortline);
- label(67,685,game==2?"CARBON: HMAC SIGNATURE DIAGNOSTICS / READ ONLY":
+ label(67,685,game==2?"CARBON: CASH EDIT / VERIFIED 3X HMAC / BACKUP":
       "MOST WANTED: CASH + BOUNTY MC02    /    HEAT: READ ONLY");
 }
 static void game_card(int idx,int x,int y){
@@ -582,72 +582,72 @@ static void bounty_result_page(void){
  footer("B  BACK TO TOOL MENU");
 }
 static void carbon_cash_info_page(void){
- header("CARBON / AUTHENTICATION");
+ header("CARBON / CAREER");
  frame(64,182,1150,420,0);
  txt(94,211,3,"YOUR CARBON CAREER",WHITE);
  label(95,269,"ORIGINAL XBOX 20CM / JDLZ");
  rect(95,307,684,4,accent);
  if(carbon_cash_error){
-  txt(94,346,2,carbon_error(carbon_cash_error),RED);
-  label(95,400,"SAVE NOT MODIFIED");
+  txt(94,344,2,carbon_error(carbon_cash_error),RED);
  }else{
   txt(95,346,2,"CURRENT CASH",MUTED);
   char money[45];snprintf(money,sizeof(money),"$%u",carbon_cash_value);
   big_number(95,392,money);
  }
- txt(95,512,2,"NO FILES ARE CHANGED BY THIS CHECK",MUTED);
+ txt(95,512,2,carbon_hmac_status==0?"PRESS A TO EDIT CASH":"SAVE EDITING IS LOCKED",carbon_hmac_status==0?accent:RED);
  rect(813,209,374,360,COLOR(22,31,37));
  rect(813,209,6,360,accent);
  txt(836,232,2,"PROFILE",MUTED);
- if(nfiles && selected>=0 && selected<nfiles)
+ if(nfiles&&selected>=0&&selected<nfiles)
   cliptext(836,268,2,files[selected].name,WHITE,20);
- txt(836,328,2,"XBOX SIGNATURE",MUTED);
+ txt(836,328,2,"XBOX SAVE SIGNATURE",MUTED);
  txt(836,371,2,carbon_hmac_status==0?"HMAC 1 / 2 / 3: MATCH":
-        "NOT VERIFIED",carbon_hmac_status==0?accent:RED);
- label(836,433,carbon_auth_error(carbon_hmac_status));
- label(836,497,"SOURCE: GAME/DEFAULT.XBE");
- footer(nfiles==1?"B  BACK TO GAMES   /   SIGNATURE DIAGNOSTICS":
-       "B  BACK TO CAREERS   /   SIGNATURE DIAGNOSTICS");
+       "NOT VERIFIED",carbon_hmac_status==0?accent:RED);
+ label(836,428,carbon_hmac_status==0?"READY / VERIFIED 20CM":carbon_auth_error(carbon_hmac_status));
+ label(836,497,"BACKUP BEFORE EVERY WRITE");
+ footer(carbon_hmac_status==0 && !carbon_cash_error?
+        "A  EDIT CASH       B  GAMES":
+        "B  BACK       SAVE IS READ ONLY");
 }
 static void carbon_cash_edit_page(void){
- header("CARBON / EXPERIMENTAL CASH");
- info_panel("SET TEST CASH","CREATES A SEPARATE SAVE FILE - NO OVERWRITE");
+ header("CARBON / EDIT CASH");
+ info_panel("CHOOSE YOUR CASH","LIVE 20CM VERIFIED / CUSTOM AMOUNT");
  char b[80];snprintf(b,sizeof(b),"CURRENT: $%u",carbon_cash_value);
  txt(91,286,2,b,WHITE);
- txt(91,338,2,"TEST AMOUNT:",accent);
+ txt(91,338,2,"NEW CASH:",accent);
  snprintf(b,sizeof(b),"%09u",carbon_test_amount);
  big_number(91,376,b);
  rect(91+(8-digit)*40,432,37,5,accent);
- label(91,476,"UP / DOWN  CHANGE AMOUNT");
+ label(91,476,"UP / DOWN  CHANGE SELECTED DIGIT");
  label(91,512,"LEFT / RIGHT  SELECT DIGIT");
- footer("A  REVIEW EXPERIMENT       B  BACK");
+ footer("A  REVIEW CHANGE       B  CANCEL");
 }
 static void carbon_cash_test_confirm_page(void){
- header("CARBON / TEST SAVE CONFIRM");
- info_panel("EXPERIMENTAL SAVE ONLY","XBOX WRAPPER AUTHENTICATION IS NOT YET VERIFIED");
+ header("CARBON / CONFIRM CASH EDIT");
+ info_panel("SAVE SECURITY CHECK","COMPACT JDLZ / 3 X HMAC-SHA1");
  char b[100];snprintf(b,sizeof(b),"CASH: $%u -> $%u",
                              carbon_cash_value,carbon_test_amount);
  txt(91,283,2,b,WHITE);
- txt(91,338,2,"ORIGINAL CAREER WILL NOT BE MODIFIED",accent);
- txt(91,380,2,"OUTPUT: NFSLAB_TEST_ALIAS_*",WHITE);
- label(91,433,"THE GAME MAY REJECT THIS TEST FILE");
- label(91,473,"MANUAL DBI REPLACEMENT NEEDED FOR GAME TEST");
- label(91,525,"HOLD ZL + ZR AND PRESS A TO CREATE");
- footer("ZL + ZR + A  CREATE TEST       B  CANCEL");
+ txt(91,338,2,"FIRST: VERIFIED ORIGINAL BACKUP",accent);
+ txt(91,380,2,"SECOND: REBUILD JDLZ / ALL 3 HMACS",accent);
+ label(91,433,"THIRD: RE-READ AND VERIFY NEW SAVE");
+ label(91,473,"IF WRITE FAILS, RESTORE ORIGINAL");
+ label(91,525,"HOLD ZL + ZR AND PRESS A");
+ footer("ZL + ZR + A  WRITE       B  CANCEL");
 }
 static void carbon_cash_test_result_page(void){
- header("CARBON / TEST FILE RESULT");
- info_panel(carbon_test_error?"NO TEST FILE CREATED":"TEST SAVE CREATED",
-            "THE LIVE CARBON CAREER WAS NEVER REPLACED");
+ header("CARBON / CASH EDIT RESULT");
+ info_panel(carbon_test_error?"CASH NOT MODIFIED":"CASH UPDATED",
+            "20CM / JDLZ / ORIGINAL-XBOX HMAC");
  if(carbon_test_error){
   txt(91,320,2,carbon_error(carbon_test_error),RED);
-  label(91,393,"KEEP USING THE ORIGINAL SAVE");
+  label(91,393,"CHECK .nfslab.bakN IF RECOVERY IS NEEDED");
  }else{
-  char b[64];snprintf(b,sizeof(b),"TEST CASH: $%u",carbon_test_amount);
+  char b[64];snprintf(b,sizeof(b),"NEW CASH: $%u",carbon_test_amount);
   txt(91,317,3,b,accent);
-  txt(91,401,2,"FILE: NFSLAB_TEST_ALIAS_*",WHITE);
-  label(91,456,"USE DBI TO COPY AND RENAME TEST FOR A GAME LOAD");
-  label(91,506,"MAKE A SEPARATE BACKUP OF ORIGINAL FIRST");
+  txt(91,401,2,"VERIFIED BACKUP CREATED: .nfslab.bakN",WHITE);
+  label(91,456,"CARBON SHOULD NOW READ UPDATED MONEY");
+  label(91,506,"KEEP ORIGINAL BACKUP UNTIL GAME LOAD TEST");
  }
  footer("B  BACK TO CARBON CAREER");
 }
@@ -754,8 +754,7 @@ static void handle(u64 key,u64 held){
    discover();
    if(game==2 && nfiles==1){
     carbon_cash_error=carbon_read_cash(files[0].path,&carbon_cash_value);
-    carbon_hmac_status=carbon_auth_verify_file(files[0].path,
-        "sdmc:/switch/nfscx/game/default.xbe");
+    carbon_hmac_status=carbon_auth_verify_zero_file(files[0].path);
     status_line[0]=0;screen=22;
    }else{
     if(game==2 && nfiles>0)status_line[0]=0;
@@ -769,8 +768,7 @@ static void handle(u64 key,u64 held){
   else if(key&HidNpadButton_A&&nfiles){
    if(game==2){
     carbon_cash_error=carbon_read_cash(files[selected].path,&carbon_cash_value);
-    carbon_hmac_status=carbon_auth_verify_file(files[selected].path,
-        "sdmc:/switch/nfscx/game/default.xbe");
+    carbon_hmac_status=carbon_auth_verify_zero_file(files[selected].path);
     status_line[0]=0;screen=22;
    }else{
     old_val=0;new_val=0;digit=4;action=0;screen=7;
@@ -929,13 +927,15 @@ static void handle(u64 key,u64 held){
  }else if(screen==21&&key&HidNpadButton_B)screen=7;
  else if(screen==22){
   if(key&HidNpadButton_B){screen=nfiles==1?0:1;status_line[0]=0;}
-  /* Write disabled while original-Xbox signing is not confirmed. */
-  
+  else if(key&HidNpadButton_A && !carbon_cash_error && !carbon_hmac_status){
+   carbon_test_amount=carbon_cash_value;
+   digit=4;screen=23;status_line[0]=0;
+  }
  }else if(screen==23){
   if(key&HidNpadButton_B)screen=22;
   else if(key&HidNpadButton_A){
    if(carbon_test_amount==carbon_cash_value)
-    snprintf(status_line,sizeof(status_line),"TEST AMOUNT MUST DIFFER FROM CURRENT CASH");
+    snprintf(status_line,sizeof(status_line),"NEW CASH MUST DIFFER FROM CURRENT VALUE");
    else{screen=24;status_line[0]=0;}
   }else{
    int previous=metric;metric=0;
@@ -945,9 +945,13 @@ static void handle(u64 key,u64 held){
   if(key&HidNpadButton_B)screen=23;
   else if(key&HidNpadButton_A){
    if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
-    carbon_test_error=carbon_create_cash_test(files[selected].path,
+    carbon_test_error=carbon_apply_cash(files[selected].path,
       carbon_cash_value,carbon_test_amount,
-      carbon_test_path,sizeof(carbon_test_path));
+      backup_path,sizeof(backup_path));
+    if(!carbon_test_error){
+     carbon_cash_value=carbon_test_amount;
+     carbon_hmac_status=carbon_auth_verify_zero_file(files[selected].path);
+    }
     screen=25;status_line[0]=0;
    }else snprintf(status_line,sizeof(status_line),"HOLD ZL + ZR AND PRESS A");
   }
