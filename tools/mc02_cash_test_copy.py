@@ -70,17 +70,20 @@ def main():
             return
         output=args.output
         # Exclusive create: neither source nor pre-existing outputs are overwritten.
+        created=False
         try:
             with output.open("xb") as f:
+                created=True
                 f.write(patched)
             readback=output.read_bytes()
             if readback!=patched or validate(readback)!=args.cash:
                 raise RuntimeError("written copy verification failed")
         except Exception:
-            if output.exists():
+            # Only remove a file created by this run. Never delete an existing
+            # output when exclusive-create raises FileExistsError.
+            if created:
                 try:
-                    if output.read_bytes()!=before:
-                        output.unlink()
+                    output.unlink()
                 except OSError:
                     pass
             raise
