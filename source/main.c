@@ -9,6 +9,7 @@
 #include "engine.h"
 #include "backup.h"
 #include "diagnostics.h"
+#include "mc02.h"
 #include "font8x8_basic.h"
 
 #define SW 1280
@@ -47,6 +48,7 @@ static int diff_error=0;
 static int scan_err=0,patch_err=0;
 static char backup_path[1024]={0};
 static int backup_error=0;
+static int cash_error=0;
 static char status_line[190]="READY TO SCAN LOCAL SAVES";
 static Framebuffer fb;
 static uint32_t *pixels;
@@ -106,7 +108,7 @@ static void header(const char *sub){
  txt(74,46,3,"N",BG);
  txt(133,30,4,"NFS",WHITE);txt(231,30,4,"SAVE LAB",accent);
  txt(135,73,2,"NINTENDO SWITCH  /  HOMEBREW",MUTED);
- txt(980,42,2,"BUILD 0.4.0",WHITE);
+ txt(980,42,2,"BUILD 0.5.0",WHITE);
  rect(65,111,1150,2,COLOR(46,61,67));
  txt(66,136,2,sub,MUTED);
 }
@@ -125,7 +127,7 @@ static void big_number(int x,int y,const char *s){
 }
 static void footer(const char *shortline){
  label(67,648,shortline);
- label(67,685,"READ-ONLY ANALYSIS  /  ORIGINAL SAVES ARE NEVER PATCHED");
+ label(67,685,"CASH: VERIFIED MC02 ONLY   /   BOUNTY + HEAT: READ ONLY");
 }
 static void game_card(int idx,int x,int y){
  int active=game==idx,w=360,h=355;
@@ -163,9 +165,9 @@ static void info_panel(const char *heading,const char *subtitle){
  txt(862,284,2,game_names[game],accent);
  label(862,331,"CURRENT VALUE");
  char b[50];snprintf(b,sizeof(b),"%09u",old_val);txt(862,362,3,b,WHITE);
- label(862,416,"ANALYSIS MODE");
- pill(862,451,"READ ONLY",accent);
- label(862,520,"NO RAW SAVE WRITES");
+ label(862,416,"EDITOR STATUS");
+ pill(862,451,game==0?"CASH MC02":"READ ONLY",accent);
+ label(862,520,"VERIFIED HASH / BACKUP");
 }
 static void files_page(void){
  header("01 / LOCAL SAVE FILES");
@@ -178,21 +180,24 @@ static void files_page(void){
   char b[80];snprintf(b,sizeof(b),"%02d  %.31s",i+1,files[i].name);
   txt(91,y+4,2,b,active?WHITE:MUTED);
   if(files[i].backup)txt(680,y+4,2,"[COPY]",COLOR(248,180,69));
+  else txt(680,y+4,2,"[LIVE]",accent);
  }
  if(!nfiles){txt(88,335,2,"NO SAVE FILES FOUND IN KNOWN PORT FOLDERS",RED);label(88,373,"CREATE A GAME SAVE AND TRY AGAIN.");}
  footer("UP / DOWN  SELECT       A  CONTINUE       B  BACK");
 }
 static void action_page(void){
- header("02 / SAVE TOOLS");
- info_panel("CHOOSE A TOOL","READ-ONLY DIAGNOSTICS AND SAFE BACKUPS");
- const char *entries[]={"CASH SCAN","BOUNTY SCAN","HEAT SCAN","COMPARE SNAPSHOTS","CREATE BACKUP","RESTORE BACKUP"};
- const char *notes[]={"LOCATE NUMBER MATCHES","LOCATE REWARD MATCHES","ANALYZE 1 - 5","COMPARE TWO SAVE VERSIONS","COPY ORIGINAL TO .BAK","RESTORE VERIFIED SNAPSHOT"};
- for(int i=0;i<6;i++){
-  int y=282+i*50,sel=i==action;
-  if(sel){rect(78,y-9,725,44,COLOR(43,64,63));rect(78,y-9,5,44,accent);}
-  char text[75];snprintf(text,sizeof(text),"%02d   %s",i+1,entries[i]);
+ header("02 / SAFE SAVE TOOLS");
+ info_panel("CHOOSE A TOOL","GAME FORMAT GATES PREVENT UNSAFE MODIFICATIONS");
+ const char *entries[]={"EDIT CASH (MC02)","CASH SCAN","BOUNTY SCAN","HEAT SCAN",
+                       "COMPARE SNAPSHOTS","CREATE BACKUP","RESTORE BACKUP"};
+ const char *notes[]={"MOST WANTED ONLY","SEARCH READ ONLY","SEARCH READ ONLY",
+                     "SEARCH READ ONLY","COMPARE TWO SAVES","KEEP AN ORIGINAL","RESTORE SNAPSHOT"};
+ for(int i=0;i<7;i++){
+  int y=276+i*44,sel=i==action;
+  if(sel){rect(78,y-5,725,39,COLOR(43,64,63));rect(78,y-5,5,39,accent);}
+  char text[80];snprintf(text,sizeof(text),"%02d   %s",i+1,entries[i]);
   txt(94,y,2,text,sel?WHITE:MUTED);
-  cliptext(431,y,2,notes[i],sel?accent:MUTED,22);
+  cliptext(454,y,2,notes[i],sel?accent:MUTED,19);
  }
  footer("UP / DOWN  TOOL       A  OPEN       B  FILES");
 }
@@ -344,6 +349,44 @@ static void comparison_result_page(void){
  }
  footer("RESULTS ARE HYPOTHESES  /  B  BACK TO SNAPSHOTS");
 }
+static void cash_edit_page(void){
+ header("03 / MOST WANTED CASH");
+ info_panel("CHOOSE YOUR CASH","LIVE MC02 SAVE VALIDATED / CUSTOM AMOUNT");
+ txt(91,273,2,"CURRENT:",MUTED);
+ char b[64];snprintf(b,sizeof(b),"%09u",old_val);
+ txt(245,273,2,b,WHITE);
+ txt(91,322,2,"NEW CASH:",accent);
+ snprintf(b,sizeof(b),"%09u",new_val);
+ big_number(91,357,b);
+ rect(91+(8-digit)*40,412,37,5,accent);
+ label(91,456,"UP / DOWN  CHANGE SELECTED DIGIT");
+ label(91,488,"LEFT / RIGHT  SELECT DIGIT");
+ label(91,541,"A  REVIEW THE BACKUP AND REPAIR");
+ footer("A  REVIEW       B  BACK");
+}
+static void cash_confirm_page(void){
+ header("04 / CONFIRM CASH EDIT");
+ info_panel("SAVE CHECK","LIVE MC02 ONLY - VERIFIED CRC + MD5");
+ char b[80];
+ snprintf(b,sizeof(b),"CASH     %u -> %u",old_val,new_val);txt(89,306,2,b,WHITE);
+ txt(89,365,2,"FIRST: CREATE VERIFIED ORIGINAL BACKUP",accent);
+ txt(89,410,2,"SECOND: REBUILD MD5 AND THREE EA CRCS",accent);
+ txt(89,465,2,"THIRD: VERIFY FILE AND ALLOW ROLLBACK",accent);
+ txt(89,525,2,"HOLD ZL + ZR AND PRESS A TO APPLY",WHITE);
+ footer("ZL + ZR + A  WRITE       B  CANCEL");
+}
+static void cash_result_page(void){
+ header("05 / CASH EDIT RESULT");
+ info_panel(cash_error?"SAVE NOT MODIFIED":"CASH SAVED","MC02 INTEGRITY VALIDATED");
+ txt(89,312,2,cash_error?mc02_error(cash_error):"NEW CASH APPLIED",cash_error?RED:accent);
+ if(!cash_error){
+  char b[88];snprintf(b,sizeof(b),"CASH: %u",new_val);
+  txt(89,373,3,b,WHITE);
+  label(89,439,"ORIGINAL KEPT IN .nfslab.bakN");
+  label(89,487,"GAME-SIDE LOAD NOT TESTED FOR THIS VERSION");
+ }else label(89,445,"IF RECOVERY IS NEEDED, CHECK .oldpart / .bakN");
+ footer("B  RETURN TO TOOL MENU");
+}
 static void draw(void){
  uint32_t stride;
  pixels=(uint32_t*)framebufferBegin(&fb,&stride);
@@ -357,7 +400,9 @@ static void draw(void){
  case 9:restore_confirm_page();break;case 10:backup_result_page();break;
  case 11:compare_pick_page();break;
  case 12:compare_value_page(0);break;case 13:compare_value_page(1);break;
- case 14:comparison_result_page();break;}
+ case 14:comparison_result_page();break;
+ case 15:cash_edit_page();break;case 16:cash_confirm_page();break;
+ case 17:cash_result_page();break;}
  if(status_line[0]){
   rect(64,605,1150,23,COLOR(36,45,50));
   cliptext(73,609,2,status_line,WHITE,68);
@@ -367,7 +412,7 @@ static void draw(void){
 static int is_dir(const char *p){struct stat st;return stat(p,&st)==0&&S_ISDIR(st.st_mode);}
 static int suitable(const char *name){
  if(name[0]=='.'||strstr(name,".nfslab."))return 0;
- const char *bad[]={".nro",".nsp",".xex",".xbe",".iso",".png",".jpg",".dds",".log",".toml",".nfsp",".bak",".tmp",".xml",".txt",".zip",".7z",NULL};
+ const char *bad[]={".nro",".nsp",".xex",".xbe",".iso",".png",".jpg",".dds",".log",".toml",".nfsp",".bak",".tmp",".xml",".txt",".zip",".7z",".header",NULL};
  for(int i=0;bad[i];i++){size_t n=strlen(name),s=strlen(bad[i]);if(n>=s&&!strcasecmp(name+n-s,bad[i]))return 0;}
  return 1;
 }
@@ -380,7 +425,9 @@ static void crawl(const char *root,int depth,int backup){
   char p[PATH_CAP];int len=snprintf(p,sizeof(p),"%s/%s",root,ent->d_name);
   if(len<0||(size_t)len>=sizeof(p))continue;
   struct stat st;if(stat(p,&st))continue;
-  if(S_ISDIR(st.st_mode)){crawl(p,depth+1,backup);continue;}
+  if(S_ISDIR(st.st_mode)){
+   if(!strcasecmp(ent->d_name,"Headers"))continue;
+   crawl(p,depth+1,backup);continue;}
   if(!S_ISREG(st.st_mode)||st.st_size<32||st.st_size>(off_t)LAB_MAX_FILE||!suitable(ent->d_name))continue;
   SaveFile *f=&files[nfiles++];
   snprintf(f->path,sizeof(f->path),"%s",p);snprintf(f->name,sizeof(f->name),"%s",ent->d_name);
@@ -425,13 +472,22 @@ static void handle(u64 key,u64 held){
  }else if(screen==7){
   if(key&HidNpadButton_B)screen=1;
   else if(key&HidNpadButton_Up&&action>0)action--;
-  else if(key&HidNpadButton_Down&&action<5)action++;
+  else if(key&HidNpadButton_Down&&action<6)action++;
   else if(key&HidNpadButton_A){
-   if(action<3){
-    metric=action;old_val=metric==2?1:0;digit=4;screen=2;
-   }else if(action==3){
-    metric=0;load_backups();screen=11;
+   if(action==0){
+    if(game!=0||files[selected].backup){
+     snprintf(status_line,sizeof(status_line),"CASH EDIT ONLY FOR LIVE MOST WANTED MC02 FILES");
+    }else {
+     cash_error=mc02_read_cash(files[selected].path,&old_val);
+     if(cash_error)snprintf(status_line,sizeof(status_line),
+       "EDIT BLOCKED: %s",mc02_error(cash_error));
+     else{new_val=old_val;digit=4;screen=15;}
+    }
+   }else if(action>=1&&action<=3){
+    metric=action-1;old_val=metric==2?1:0;digit=4;screen=2;
    }else if(action==4){
+    metric=0;load_backups();screen=11;
+   }else if(action==5){
     if(files[selected].backup){
      snprintf(status_line,sizeof(status_line),"CANNOT BACK UP PORT'S MIRROR AS A LIVE SAVE");
     }else{
@@ -499,6 +555,23 @@ static void handle(u64 key,u64 held){
    }
   }else change_number(key,v);
  }else if(screen==14&&key&HidNpadButton_B)screen=11;
+ else if(screen==15){
+  if(key&HidNpadButton_B)screen=7;
+  else if(key&HidNpadButton_A)screen=16;
+  else {int prior=metric;metric=0;change_number(key,&new_val);metric=prior;}
+ }else if(screen==16){
+  if(key&HidNpadButton_B)screen=15;
+  else if(key&HidNpadButton_A){
+   if((held&HidNpadButton_ZL)&&(held&HidNpadButton_ZR)){
+    cash_error=mc02_apply_cash(files[selected].path,old_val,new_val,
+                                backup_path,sizeof(backup_path));
+    screen=17;
+    snprintf(status_line,sizeof(status_line),
+     cash_error?"CASH EDIT FAILED / CHECK BACKUP PATH":"CASH UPDATED / VERIFIED BACKUP RETAINED");
+   }else snprintf(status_line,sizeof(status_line),
+      "HOLD ZL + ZR AND PRESS A TO CONFIRM");
+  }
+ }else if(screen==17&&key&HidNpadButton_B)screen=7;
 }
 int main(int argc,char **argv){
  (void)argc;(void)argv;
