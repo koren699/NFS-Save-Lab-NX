@@ -10,16 +10,16 @@
 
 
 
-![NFS Save Lab NX v0.16 home screen with Most Wanted, Underground 2 and Carbon pixel-art covers](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/01-main-menu.jpg)
+![NFS Save Lab NX v0.16 home screen with Most Wanted, Underground 2 and Carbon pixel-art covers](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/01-main-menu.jpg)
 
 <details>
 <summary>See more screenshots: Most Wanted, Underground 2 and Carbon</summary>
 
-![Most Wanted — save file selection](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/02-most-wanted-save-list.jpg)
+![Most Wanted — save file selection](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/02-most-wanted-save-list.jpg)
 
-![Underground 2 — career selection](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/03-underground-2-profiles.jpg)
+![Underground 2 — career selection](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/03-underground-2-profiles.jpg)
 
-![Carbon — cash amount and valid Xbox save signatures](https://raw.githubusercontent.com/koren699/NFS-Save-Lab-NX/main/docs/screenshots/04-carbon-cash.jpg)
+![Carbon — cash amount and valid Xbox save signatures](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/04-carbon-cash.jpg)
 
 </details>
 
