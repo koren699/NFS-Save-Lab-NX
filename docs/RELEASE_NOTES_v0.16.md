@@ -4,18 +4,18 @@
 
 > **Download:** Under **Assets**, choose `nfs_save_lab_nx.nro` (ready to place on your Switch) or the Full HD ZIP. **Do not use “Source code (zip)”**—it does not contain the ready-to-run editor. The app requires the corresponding fan-made Switch game ports; it does not edit PC saves.
 
-## Screenshots / Скриншоти / Скриншоты
+## Screenshots / Скриншоти
 
 ![NFS Save Lab NX v0.16 — pixel-art selection menu for all three supported Need for Speed games](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/01-main-menu.jpg)
 
 <details>
-<summary>View 3 more screenshots · Ще 3 скриншоти · Ещё 3 скриншота</summary>
+<summary>View 3 more screenshots · Ще 3 скриншоти</summary>
 
-**Most Wanted — save browser / вибір збереження / выбор сохранения**
+**Most Wanted — save browser / вибір збереження**
 
 ![Most Wanted — NFS Save Lab NX save browser](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/02-most-wanted-save-list.jpg)
 
-**Underground 2 — career selection / вибір кар'єри / выбор карьеры**
+**Underground 2 — career selection / вибір кар'єри**
 
 ![Underground 2 — NFS Save Lab NX career selection](https://github.com/koren699/NFS-Save-Lab-NX/releases/download/v0.16/03-underground-2-profiles.jpg)
 
@@ -62,26 +62,8 @@
 
 ---
 
-## 🇷🇺 Русский
+**Unofficial community project · Неофіційний фанатський проєкт**
 
-**NFS Save Lab NX** — неофициальный homebrew-редактор сохранений для Nintendo Switch и фанатских портов **Need for Speed: Most Wanted (2005), Underground 2 и Carbon**.
+Not affiliated with Electronic Arts or Nintendo. Back up your saves before editing. / Не пов’язаний з Electronic Arts або Nintendo. Зробіть резервну копію.
 
-**Возможности v0.16:**
-- **Most Wanted (2005):** редактирование денег (**Cash**) и накопленного рейтинга полиции (**Bounty**) с учётом автомобилей в гараже и истории проданных машин.
-- **Underground 2:** изменение количества денег (**Cash**).
-- **Carbon:** изменение количества денег (**Cash**).
-- Автоматический поиск и проверка поддерживаемых файлов карьеры.
-- Проверенные резервные копии `.nfslab.bakN` перед изменением сохранения и повторная проверка после записи.
-- Пиксельный интерфейс с тремя HD-постерами и собственной иконкой Homebrew Menu.
-
-**Все перечисленные функции протестированы на реальной Nintendo Switch.** Программа создана для конкретных фанатских портов Switch, **не для PC-версий игр**.
-
-**Установка:** скачайте **Full HD NRO**, прикреплённый к этому релизу, скопируйте `nfs_save_lab_nx.nro` в `sdmc:/switch/` и запустите через Homebrew Menu. Полностью закройте игру и заранее сделайте независимую резервную копию всей папки сохранения. Выберите игру, карьеру и нужную сумму. Для подтверждения записи удерживайте **ZL + ZR + A**.
-
----
-
-**Unofficial community project · Неофіційний фанатський проєкт · Неофициальный фанатский проект**
-
-Not affiliated with Electronic Arts or Nintendo. Back up your saves before editing. / Не пов’язаний з Electronic Arts або Nintendo. Зробіть резервну копію. / Не связан с Electronic Arts или Nintendo. Делайте резервные копии.
-
-**Links / Посилання / Ссылки:** [Project README (EN)](https://github.com/koren699/NFS-Save-Lab-NX/blob/main/README.md) · [Українська](https://github.com/koren699/NFS-Save-Lab-NX/blob/main/README_UA.md) · [Русский](https://github.com/koren699/NFS-Save-Lab-NX/blob/main/README_RU.md)
+**Links / Посилання:** [Project README (EN)](https://github.com/koren699/NFS-Save-Lab-NX/blob/main/README.md) · [Українська](https://github.com/koren699/NFS-Save-Lab-NX/blob/main/README_UA.md)
